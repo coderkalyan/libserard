@@ -26,7 +26,7 @@ extern "C" {
 /// Semantic version of this library (not the Cyphal specification).
 /// API will be backward compatible within the same major version.
 #define SERARD_VERSION_MAJOR 0
-#define SERARD_VERSION_MINOR 0
+#define SERARD_VERSION_MINOR 1
 
 /// The version number of the Cyphal specification implemented by this library.
 #define SERARD_CYPHAL_SPECIFICATION_VERSION_MAJOR 1
@@ -47,6 +47,9 @@ extern "C" {
 #define SERARD_SERVICE_ID_MAX 511U
 #define SERARD_NODE_ID_MAX 0xFFFEU
 #define SERARD_PRIORITY_MAX 7U
+// TODO: probably incorrect max?
+#define SERARD_TRANSFER_ID_BIT_LENGTH 5U
+#define SERARD_TRANSFER_ID_MAX ((1U << SERARD_TRANSFER_ID_BIT_LENGTH) - 1U)
 
 /// This value represents an undefined node-ID: broadcast destination or anonymous source.
 #define SERARD_NODE_ID_UNSET 0xFFFFU
@@ -252,13 +255,13 @@ struct SerardReassembler
 /// If any of the pointers are NULL, the behavior is undefined.
 /// The instance does not hold any resources itself except for the allocated memory.
 /// The time complexity is constant. This function does not invoke the dynamic memory manager.
-struct Serard serardInit(const SerardMemoryAllocate        memory_allocate,
-                         const struct SerardMemoryResource memory_payload,
+struct Serard serardInit(const struct SerardMemoryResource memory_payload,
                          const struct SerardMemoryResource memory_rx_session);
 
 /// TODO the docs are missing.
 /// Negative -- invalid argument; zero -- emitter failure; positive -- success.
-int32_t serardTxPush(const struct SerardTransferMetadata* const metadata,
+int32_t serardTxPush(struct Serard* const                       ins,
+                     const struct SerardTransferMetadata* const metadata,
                      const size_t                               payload_size,
                      const void* const                          payload,
                      void* const                                user_reference,
