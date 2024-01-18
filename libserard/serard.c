@@ -5,13 +5,11 @@
 
 #include "serard.h"
 #include "_serard_cavl.h"
-#include <stdint.h>
+#include <bits/stdint-uintn.h>
+#include <stdbool.h>
 #include <string.h>
 #include <sys/types.h>
 
-// TODO: remove
-#include <stdio.h>
-#include <stdbool.h>
 // --------------------------------------------- BUILD CONFIGURATION ---------------------------------------------
 
 /// By default, this macro resolves to the standard assert(). The user can redefine this if necessary.
@@ -42,17 +40,35 @@
 
 #define BITS_PER_BYTE 8U
 #define BYTE_MAX 0xFFU
+#define BYTE0_OFFSET 0U
+#define BYTE1_OFFSET 8U
+#define BYTE2_OFFSET 16U
+#define BYTE3_OFFSET 24U
+#define BYTE4_OFFSET 32U
+#define BYTE5_OFFSET 40U
+#define BYTE6_OFFSET 48U
+#define BYTE7_OFFSET 56U
 
 #define HEADER_CRC_SIZE_BYTES 2U
 #define HEADER_SIZE_NO_CRC 22U
 #define HEADER_SIZE (HEADER_SIZE_NO_CRC + HEADER_CRC_SIZE_BYTES)
-// #define HEADER_VERSION (UINT32_C(1) << 4U)
 #define HEADER_VERSION 1U
+#define HEADER_USER_DATA 0U
+
+#define HEADER_OFFSET_VERSION 0U
+#define HEADER_OFFSET_PRIORITY 1U
+#define HEADER_OFFSET_SOURCE_ID 2U
+#define HEADER_OFFSET_DEST_ID 4U
+#define HEADER_OFFSET_DATA_SPECIFIER 6U
+#define HEADER_OFFSET_TRANSFER_ID 8U
+#define HEADER_OFFSET_FRAME_INDEX 16U
+#define HEADER_OFFSET_USER_DATA 20U
+#define HEADER_OFFSET_CRC 22U
 
 #define COBS_OVERHEAD_RATE 254U
 #define COBS_FRAME_DELIMITER 0U
 
-// #define OFFSET_PRIORITY_BITS 5U
+#define DATA_SPECIFIER_PORT_MASK 0x3FFFU
 #define SERVICE_NOT_MESSAGE 0x8000U
 #define REQUEST_NOT_RESPONSE 0x4000U
 #define FRAME_INDEX 0U
@@ -178,7 +194,8 @@ SERARD_PRIVATE TransferCRC transferCRCAdd(const uint32_t crc, const size_t size,
 
 // --------------------------------------------- RECEPTION ---------------------------------------------
 // TODO: documentation
-struct SerardInternalRxSession {
+struct SerardInternalRxSession
+{
     struct SerardTreeNode      base;
     SerardMicrosecond   transfer_timestamp_usec;
     SerardNodeID        source_node_id;
@@ -190,7 +207,8 @@ struct SerardInternalRxSession {
 };
 
 // TODO: documentation
-struct RxTransferModel {
+struct RxTransferModel
+{
     SerardMicrosecond   timestamp_usec;
     enum SerardPriority      priority;
     enum SerardTransferKind  transfer_kind;
@@ -198,9 +216,8 @@ struct RxTransferModel {
     SerardNodeID        source_node_id;
     SerardNodeID        destination_node_id;
     SerardTransferID    transfer_id;
-    // bool                end_of_transfer;
-    size_t              payload_size;
-    const void*         payload;
+    // size_t              payload_size;
+    // uint8_t*               payload;
 };
 
 struct FrameHeaderModel
@@ -216,57 +233,53 @@ struct FrameHeaderModel
     uint8_t header_crc16_big_endian[2];
 };
 
-struct CobsEncodeState
+struct CobsEncoder
 {
-    uint8_t* buffer;
     size_t loc;
     size_t chunk;
 };
-/// Returns truth if the frame is valid and parsed successfully. False if the frame is not a valid Cyphal/CAN frame.
-// SERARD_PRIVATE bool rxTryParseTransfer(const SerardMicrosecond  timestamp_usec,
-//                                        const uint8_t* const     payload,
-//                                        size_t                   payload_size,
-//                                        RxTransferModel* const   out)
-// {
-//     SERARD_ASSERT(out != NULL);
-//     bool valid = false;
-//     if (payload_size >= HEADER_SIZE) {
-//         SERARD_ASSERT(payload != NULL);
-//         out->timestamp_usec = timestamp_usec;
-//
-//         valid = (payload[0] == HEADER_VERSION);
-//
-//         // TODO: i doubt this is misra compliant
-//         out->priority = (SerardPriority) (payload[OFFSET_PRIORITY] >> OFFSET_PRIORITY_BITS);
-//         out->source_node_id = *((SerardNodeID*) &payload[OFFSET_SOURCE_NODE_ID]);
-//         out->destination_node_id = *((SerardNodeID*) &payload[OFFSET_DESTINATION_NODE_ID]);
-//         out->port_id = *((SerardPortID*) &payload[OFFSET_PORT_ID]);
-//         out->transfer_id = *((SerardTransferID*) &payload[OFFSET_TRANSFER_ID]);
-//
-//         // TODO: validate and parse port id
-//         // TODO: CRC
-//
-//         out->payload_size = payload_size - HEADER_SIZE;
-//         out->payload = &payload[HEADER_SIZE];
-//
-//         // TODO: final validation
-//     }
-//
-//     return valid;
-// }
-//
-// SERARD_PRIVATE void rxInitTransferMetadataFromModel(const RxTransferModel* const     frame,
-//                                                        struct SerardTransferMetadata* const out_transfer)
-// {
-//     SERARD_ASSERT(frame != NULL);
-//     SERARD_ASSERT(frame->payload != NULL);
-//     SERARD_ASSERT(out_transfer != NULL);
-//     out_transfer->priority       = frame->priority;
-//     out_transfer->transfer_kind  = frame->transfer_kind;
-//     out_transfer->port_id        = frame->port_id;
-//     out_transfer->remote_node_id = frame->source_node_id;
-//     out_transfer->transfer_id    = frame->transfer_id;
-// }
+
+#define REASSEMBLER_STATE_DELIMITER_SYNC   0U
+#define REASSEMBLER_STATE_DELIMITER_SKIP   1U
+#define REASSEMBLER_STATE_HEADER_VERSION   2U
+#define REASSEMBLER_STATE_HEADER_PRIORITY  3U
+#define REASSEMBLER_STATE_HEADER_SOURCE    4U
+#define REASSEMBLER_STATE_HEADER_DEST      5U
+#define REASSEMBLER_STATE_HEADER_SPECIFIER 6U
+#define REASSEMBLER_STATE_HEADER_TRANSFER  7U
+#define REASSEMBLER_STATE_HEADER_FRAME     8U
+#define REASSEMBLER_STATE_HEADER_USER      9U
+#define REASSEMBLER_STATE_HEADER_CRC       10U
+#define REASSEMBLER_STATE_HEADER           11U
+#define REASSEMBLER_STATE_PAYLOAD           12U
+
+enum ReassemblerState 
+{
+    STATE_REJECT = 0U,
+    STATE_DELIMITER,
+    STATE_HEADER,
+    STATE_PAYLOAD,
+};
+
+enum CobsDecodeResult
+{
+    COBS_DECODE_DELIMITER = 0U,
+    COBS_DECODE_NONE,
+    COBS_DECODE_DATA,
+};
+
+SERARD_PRIVATE void rxInitTransferMetadataFromModel(const struct RxTransferModel* const     frame,
+                                                    struct SerardTransferMetadata* const out_transfer)
+{
+    SERARD_ASSERT(frame != NULL);
+    SERARD_ASSERT(out_transfer != NULL);
+
+    out_transfer->priority       = frame->priority;
+    out_transfer->transfer_kind  = frame->transfer_kind;
+    out_transfer->port_id        = frame->port_id;
+    out_transfer->remote_node_id = frame->source_node_id;
+    out_transfer->transfer_id    = frame->transfer_id;
+}
 //
 // SERARD_PRIVATE int8_t
 // rxSubscriptionPredicateOnSession(void* const user_reference,  // NOSONAR Cavl API requires pointer to non-const.
@@ -279,76 +292,79 @@ struct CobsEncodeState
 //     return (sought == other) ? 0 : NegPos[sought > other];  // NOLINT no narrowing conversion is taking place here
 // }
 
-// SERARD_PRIVATE int8_t rxAcceptTransfer(struct Serard* const                   ins,
-//                                        struct SerardRxSubscription* const     subscription,
-//                                        const struct SerardRxTransfer* const    transfer,
-//                                        struct SerardReassembler* const        reassembler,
-//                                        struct SerardRxTransfer* const         out_transfer)
-// {
-//     SERARD_ASSERT(ins != NULL);
-//     SERARD_ASSERT(subscription != NULL);
-//     SERARD_ASSERT(transfer != NULL);
-//     SERARD_ASSERT(transfer->payload != NULL);
-//     SERARD_ASSERT(transfer->transfer_id <= SERARD_TRANSFER_ID_MAX);
-//     SERARD_ASSERT(subscription->port_id == transfer->port_id);
-//     SERARD_ASSERT((SERARD_NODE_ID_UNSET == transfer->destination_node_id) || (ins->node_id == transfer->destination_node_id));
-//     SERARD_ASSERT(out_transfer != NULL);
-//
-//     int8_t ret = 0;
-//     if (transfer->source_node_id <= SERARD_NODE_ID_MAX) {
-//         SerardInternalRxSession* const rxs =
-//             (SerardInternalRxSession*) ins->memory_allocate(ins, sizeof(SerardInternalRxSession));
-//         const SerardTreeNode* const node = cavlSearch(&subscription->sessions,
-//                                                       (void *) &transfer->source_node_id, // TODO: should this be void*?
-//                                                       &rxSubscriptionPredicateOnSession,
-//                                                       &avlTrivialFactory);
-//
-//         if (rxs != NULL) {
-//             rxs->transfer_timestamp_usec = transfer->timestamp_usec;
-//             rxs->source_node_id = transfer->source_node_id;
-//             rxs->total_payload_size      = 0U;
-//             rxs->payload_size            = 0U;
-//             rxs->payload                 = NULL;
-//             // rxs->calculated_crc          = CRC_INITIAL; // TODO
-//             rxs->transfer_id             = transfer->transfer_id;
-//         } else {
-//             ret = -SERARD_ERROR_OUT_OF_MEMORY;
-//         }
-//         // There are two possible reasons why the session mserialay not exist: 1. OOM; 2. SOT-miss.
-//         if (node != NULL) {
-//             SERARD_ASSERT(ret == 0);
-//             // TODO: does anything have to be updated?
-//             // ret = rxSessionUpdate(ins,
-//             //                       subscription->sessions[transfer->source_node_id],
-//             //                       transfer,
-//             //                       subscription->transfer_id_timeout_usec,
-//             //                       subscription->extent,
-//             //                       out_transfer);
-//         }
-//     } else {
-//         SERARD_ASSERT(transfer->source_node_id == SERARD_NODE_ID_UNSET);
-//         // Anonymous transfers are stateless. No need to update the state machine, just blindly accept it.
-//         // We have to copy the data into an allocated storage because the API expects it: the lifetime shall be
-//         // independent of the input data and the memory shall be free-able.
-//         const size_t payload_size =
-//             (subscription->extent < transfer->payload_size) ? subscription->extent : transfer->payload_size;
-//         void* const payload = ins->memory_allocate(ins, payload_size);
-//         if (payload != NULL) {
-//             rxInitTransferMetadataFromModel(transfer, &out_transfer->metadata);
-//             out_transfer->timestamp_usec = transfer->timestamp_usec;
-//             out_transfer->payload_size   = payload_size;
-//             out_transfer->payload        = payload;
-//             // Clang-Tidy raises an error recommending the use of memcpy_s() instead.
-//             // We ignore it because the safe functions are poorly supported; reliance on them may limit the portability.
-//             SERARD_UNUSED(memcpy(payload, transfer->payload, payload_size));  // NOLINT
-//             ret = 1;
-//         } else {
-//             ret = -SERARD_ERROR_OUT_OF_MEMORY;
-//         }
-//     }
-//
-//     return ret;
-// }
+SERARD_PRIVATE int8_t rxAcceptTransfer(struct Serard* const                   ins,
+                                       struct SerardRxSubscription* const     subscription,
+                                       const struct SerardRxTransfer* const    transfer,
+                                       struct SerardReassembler* const        reassembler,
+                                       struct SerardRxTransfer* const         out_transfer)
+{
+    // SERARD_ASSERT(ins != NULL);
+    // SERARD_ASSERT(subscription != NULL);
+    // SERARD_ASSERT(transfer != NULL);
+    // SERARD_ASSERT(transfer->payload != NULL);
+    //
+    // const struct SerardTransferMetadata* const metadata = &transfer->metadata;
+    // SERARD_ASSERT(metadata->transfer_id <= SERARD_TRANSFER_ID_MAX);
+    // SERARD_ASSERT(subscription->port_id == metadata->port_id);
+    // SERARD_ASSERT((SERARD_NODE_ID_UNSET == transfer->destination_node_id) || (ins->node_id == transfer->destination_node_id));
+    // SERARD_ASSERT(out_transfer != NULL);
+    //
+    // int8_t ret = 0;
+    // if (transfer->source_node_id <= SERARD_NODE_ID_MAX) {
+    //     SerardInternalRxSession* const rxs =
+    //         (SerardInternalRxSession*) ins->memory_allocate(ins, sizeof(SerardInternalRxSession));
+    //     const SerardTreeNode* const node = cavlSearch(&subscription->sessions,
+    //                                                   (void *) &transfer->source_node_id, // TODO: should this be void*?
+    //                                                   &rxSubscriptionPredicateOnSession,
+    //                                                   &avlTrivialFactory);
+    //
+    //     if (rxs != NULL) {
+    //         rxs->transfer_timestamp_usec = transfer->timestamp_usec;
+    //         rxs->source_node_id = transfer->source_node_id;
+    //         rxs->total_payload_size      = 0U;
+    //         rxs->payload_size            = 0U;
+    //         rxs->payload                 = NULL;
+    //         // rxs->calculated_crc          = CRC_INITIAL; // TODO
+    //         rxs->transfer_id             = transfer->transfer_id;
+    //     } else {
+    //         ret = -SERARD_ERROR_OUT_OF_MEMORY;
+    //     }
+    //     // There are two possible reasons why the session mserialay not exist: 1. OOM; 2. SOT-miss.
+    //     if (node != NULL) {
+    //         SERARD_ASSERT(ret == 0);
+    //         // TODO: does anything have to be updated?
+    //         // ret = rxSessionUpdate(ins,
+    //         //                       subscription->sessions[transfer->source_node_id],
+    //         //                       transfer,
+    //         //                       subscription->transfer_id_timeout_usec,
+    //         //                       subscription->extent,
+    //         //                       out_transfer);
+    //     }
+    // } else {
+    //     SERARD_ASSERT(transfer->source_node_id == SERARD_NODE_ID_UNSET);
+    //     // Anonymous transfers are stateless. No need to update the state machine, just blindly accept it.
+    //     // We have to copy the data into an allocated storage because the API expects it: the lifetime shall be
+    //     // independent of the input data and the memory shall be free-able.
+    //     const size_t payload_size =
+    //         (subscription->extent < transfer->payload_size) ? subscription->extent : transfer->payload_size;
+    //     void* const payload = ins->memory_allocate(ins, payload_size);
+    //     if (payload != NULL) {
+    //         rxInitTransferMetadataFromModel(transfer, &out_transfer->metadata);
+    //         out_transfer->timestamp_usec = transfer->timestamp_usec;
+    //         out_transfer->payload_size   = payload_size;
+    //         out_transfer->payload        = payload;
+    //         // Clang-Tidy raises an error recommending the use of memcpy_s() instead.
+    //         // We ignore it because the safe functions are poorly supported; reliance on them may limit the portability.
+    //         SERARD_UNUSED(memcpy(payload, transfer->payload, payload_size));  // NOLINT
+    //         ret = 1;
+    //     } else {
+    //         ret = -SERARD_ERROR_OUT_OF_MEMORY;
+    //     }
+    // }
+    //
+    // return ret;
+    return 0;
+}
 
 SERARD_PRIVATE int8_t
 rxSubscriptionPredicateOnPortID(void* const                        user_reference,  // NOSONAR Cavl API requires pointer to non-const.
@@ -369,8 +385,77 @@ rxSubscriptionPredicateOnStruct(void* const                        user_referenc
     return rxSubscriptionPredicateOnPortID(&((struct SerardRxSubscription*) user_reference)->port_id, node);
 }
 
+SERARD_PRIVATE void
+hostToLittle16(uint16_t const in, uint8_t* const out)
+{
+    SERARD_ASSERT(out != NULL);
+    out[0] = (uint8_t) ((in >> BYTE0_OFFSET) & BYTE_MAX);
+    out[1] = (uint8_t) ((in >> BYTE1_OFFSET) & BYTE_MAX);
+}
+
+SERARD_PRIVATE void
+hostToLittle32(uint32_t const in, uint8_t* const out)
+{
+    SERARD_ASSERT(out != NULL);
+    out[0] = (uint8_t) ((in >> BYTE0_OFFSET) & BYTE_MAX);
+    out[1] = (uint8_t) ((in >> BYTE1_OFFSET) & BYTE_MAX);
+    out[2] = (uint8_t) ((in >> BYTE2_OFFSET) & BYTE_MAX);
+    out[3] = (uint8_t) ((in >> BYTE3_OFFSET) & BYTE_MAX);
+}
+
+SERARD_PRIVATE void
+hostToLittle64(uint64_t const in, uint8_t* const out)
+{
+    SERARD_ASSERT(out != NULL);
+    out[0] = (uint8_t) ((in >> BYTE0_OFFSET) & BYTE_MAX);
+    out[1] = (uint8_t) ((in >> BYTE1_OFFSET) & BYTE_MAX);
+    out[2] = (uint8_t) ((in >> BYTE2_OFFSET) & BYTE_MAX);
+    out[3] = (uint8_t) ((in >> BYTE3_OFFSET) & BYTE_MAX);
+    out[4] = (uint8_t) ((in >> BYTE4_OFFSET) & BYTE_MAX);
+    out[5] = (uint8_t) ((in >> BYTE5_OFFSET) & BYTE_MAX);
+    out[6] = (uint8_t) ((in >> BYTE6_OFFSET) & BYTE_MAX);
+    out[7] = (uint8_t) ((in >> BYTE7_OFFSET) & BYTE_MAX);
+}
+
 SERARD_PRIVATE uint16_t
-// uint16_t
+littleToHost16(const uint8_t* const in)
+{
+    SERARD_ASSERT(in != NULL);
+    uint16_t out = 0;
+    out |= in[0] << BYTE0_OFFSET;
+    out |= in[1] << BYTE1_OFFSET;
+    return out;
+}
+
+SERARD_PRIVATE uint32_t
+littleToHost32(const uint8_t* const in)
+{
+    SERARD_ASSERT(in != NULL);
+    uint32_t out = 0;
+    out |= in[0] << BYTE0_OFFSET;
+    out |= in[1] << BYTE1_OFFSET;
+    out |= in[2] << BYTE2_OFFSET;
+    out |= in[3] << BYTE3_OFFSET;
+    return out;
+}
+
+SERARD_PRIVATE uint64_t
+littleToHost64(const uint8_t* const in)
+{
+    SERARD_ASSERT(in != NULL);
+    uint64_t out = 0;
+    out |= ((uint64_t) in[0]) << BYTE0_OFFSET;
+    out |= ((uint64_t) in[1]) << BYTE1_OFFSET;
+    out |= ((uint64_t) in[2]) << BYTE2_OFFSET;
+    out |= ((uint64_t) in[3]) << BYTE3_OFFSET;
+    out |= ((uint64_t) in[4]) << BYTE4_OFFSET;
+    out |= ((uint64_t) in[5]) << BYTE5_OFFSET;
+    out |= ((uint64_t) in[6]) << BYTE6_OFFSET;
+    out |= ((uint64_t) in[7]) << BYTE7_OFFSET;
+    return out;
+}
+
+SERARD_PRIVATE uint16_t
 txMakeSessionSpecifier(const enum SerardTransferKind transfer_kind, const SerardPortID port_id)
 {
     SERARD_ASSERT(transfer_kind <= SerardTransferKindRequest);
@@ -382,75 +467,201 @@ txMakeSessionSpecifier(const enum SerardTransferKind transfer_kind, const Serard
     return out;
 }
 
-SERARD_PRIVATE uint8_t
-txMakeHeader(const struct Serard* const serard, const struct SerardTransferMetadata* const metadata, void* const buffer)
+SERARD_PRIVATE void
+txMakeHeader(const struct Serard* const ins, const struct SerardTransferMetadata* const metadata, uint8_t* const buffer)
 {
+    SERARD_ASSERT(ins != NULL);
     SERARD_ASSERT(metadata != NULL);
     SERARD_ASSERT(buffer != NULL);
 
-    HeaderCRC crc = HEADER_CRC_INITIAL;
+    const uint16_t data_specifier_snm = txMakeSessionSpecifier(metadata->transfer_kind, metadata->port_id);
+    const uint32_t frame_index_eot = FRAME_INDEX | END_OF_TRANSFER;
 
-    struct FrameHeaderModel* const header = (struct FrameHeaderModel*) buffer; 
-    header->version = HEADER_VERSION;
-    header->priority = (uint8_t) metadata->priority;
-    header->source_node_id = (uint16_t) serard->node_id;
-    header->destination_node_id = (uint16_t) metadata->remote_node_id;
-    header->data_specifier_snm = txMakeSessionSpecifier(metadata->transfer_kind, metadata->port_id);
-    header->transfer_id = (uint64_t) metadata->transfer_id;
-    header->frame_index_eot = FRAME_INDEX | END_OF_TRANSFER;
-    header->user_data = 0U;
+    buffer[HEADER_OFFSET_VERSION] = HEADER_VERSION;
+    buffer[HEADER_OFFSET_PRIORITY] = (uint8_t) metadata->priority;
+    hostToLittle16(ins->node_id, &buffer[HEADER_OFFSET_SOURCE_ID]);
+    hostToLittle16(metadata->remote_node_id, &buffer[HEADER_OFFSET_DEST_ID]);
+    hostToLittle16(data_specifier_snm, &buffer[HEADER_OFFSET_DATA_SPECIFIER]);
+    hostToLittle64(metadata->transfer_id, &buffer[HEADER_OFFSET_TRANSFER_ID]);
+    hostToLittle32(frame_index_eot, &buffer[HEADER_OFFSET_FRAME_INDEX]);
+    hostToLittle16(HEADER_USER_DATA, &buffer[HEADER_OFFSET_USER_DATA]);
 
-    crc = headerCRCAdd(crc, HEADER_SIZE_NO_CRC, (void *) header);
-    header->header_crc16_big_endian[0] = crc >> BITS_PER_BYTE;
-    header->header_crc16_big_endian[1] = crc & BYTE_MAX;
-
-    return HEADER_SIZE;
-}
-
-SERARD_PRIVATE struct CobsEncodeState
-cobsInit(uint8_t* buffer)
-{
-    SERARD_ASSERT(buffer != NULL);
-
-    struct CobsEncodeState state = {
-        .buffer = buffer,
-        .loc = 1,
-        .chunk = 0,
-    };
-    return state;
+    const HeaderCRC crc = headerCRCAdd(HEADER_CRC_INITIAL, HEADER_SIZE_NO_CRC, buffer);
+    buffer[HEADER_OFFSET_CRC] = (uint8_t) ((crc >> BYTE1_OFFSET) & BYTE_MAX);
+    buffer[HEADER_OFFSET_CRC + 1] = (uint8_t) ((crc >> BYTE0_OFFSET) & BYTE_MAX);
 }
 
 SERARD_PRIVATE void
-cobsEncode(struct CobsEncodeState *state,
-           const uint8_t* const src,
-           const size_t len)
+cobsEncodeByte(struct CobsEncoder* const encoder,
+               uint8_t const byte,
+               uint8_t* const out_buffer)
 {
-    SERARD_ASSERT(src != NULL);
-    // SERARD_ASSERT(len >= 2);
-    // TODO: check if buffer[len - 1] is sentinel?
+    SERARD_ASSERT(out_buffer != NULL);
 
-    size_t cur = 0;
-    while (cur < len) {
-        state->buffer[state->loc] = src[cur];
-        if (src[cur] == COBS_FRAME_DELIMITER) {
-            const size_t offset = state->loc - state->chunk;
-            SERARD_ASSERT(offset < 255); // TODO
-            state->buffer[state->chunk] = (uint8_t) offset;
-            state->chunk = state->loc;
+    out_buffer[encoder->loc] = byte;
+    if (byte == COBS_FRAME_DELIMITER)
+    {
+        const size_t offset = encoder->loc - encoder->chunk;
+        if (offset >= BYTE_MAX)
+        {
+            SERARD_ASSERT(false); // TODO: unimplemented
+        } else
+        {
+            out_buffer[encoder->chunk] = (uint8_t) offset;
+            encoder->chunk = encoder->loc;
         }
+    }
 
-        state->loc++;
-        cur++;
+    encoder->loc++;
+}
+
+SERARD_PRIVATE void
+cobsEncodeIncremental(struct CobsEncoder* const encoder,
+                      size_t const payload_size,
+                      const uint8_t* const payload,
+                      uint8_t* const out_buffer)
+{
+    SERARD_ASSERT(payload != NULL);
+    SERARD_ASSERT(out_buffer != NULL);
+
+    for (size_t i = 0; i < payload_size; i++)
+    {
+        cobsEncodeByte(encoder, payload[i], out_buffer);
     }
 }
 
-SERARD_PRIVATE size_t cobsEncodingSize(size_t payload)
+SERARD_PRIVATE size_t cobsEncodingSize(size_t const payload)
 {
     // COBS encoded frames are bounded by n + ceil(n / 254)
     const size_t overhead = (payload + COBS_OVERHEAD_RATE - 1) / COBS_OVERHEAD_RATE;
     return payload + overhead;
 }
 
+// SERARD_PRIVATE size_t
+// cobsDecode(struct SerardReassembler* const reassembler, size_t const payload_size, uint8_t* const inout_payload)
+// {
+//     size_t decoded_size = 0;
+//     for (size_t i = 0; i < payload_size; i++)
+//     {
+//         const uint8_t byte = inout_payload[i];
+//         if (byte == COBS_FRAME_DELIMITER)
+//         {
+//             reassembler->code = BYTE_MAX;
+//             reassembler->copy = 0;
+//             return decoded_size;
+//         }
+//
+//         const uint8_t old_copy = reassembler->copy;
+//         reassembler->copy--;
+//         if (old_copy != 0)
+//         {
+//             inout_payload[decoded_size++] = byte;
+//             continue;
+//         }
+//
+//         const uint8_t old_code = reassembler->code;
+//         SERARD_ASSERT(byte >= 1);
+//         reassembler->copy = byte - 1;
+//         reassembler->code = byte;
+//         if (old_code != BYTE_MAX)
+//         {
+//             inout_payload[decoded_size++] = COBS_FRAME_DELIMITER;
+//         }
+//     }
+//
+//     return decoded_size;
+// }
+
+SERARD_PRIVATE enum CobsDecodeResult
+cobsDecodeByte(struct SerardReassembler* const reassembler, uint8_t* const inout_byte)
+{
+    const uint8_t byte = *inout_byte;
+    if (byte == COBS_FRAME_DELIMITER)
+    {
+        reassembler->code = BYTE_MAX;
+        reassembler->copy = 0;
+        return COBS_DECODE_DELIMITER;
+    }
+
+    const uint8_t old_copy = reassembler->copy;
+    reassembler->copy--;
+    if (old_copy != 0)
+    {
+        *inout_byte = byte;
+        return COBS_DECODE_DATA;
+    }
+
+    const uint8_t old_code = reassembler->code;
+    SERARD_ASSERT(byte >= 1);
+    reassembler->copy = byte - 1;
+    reassembler->code = byte;
+    if (old_code != BYTE_MAX)
+    {
+        *inout_byte = 0;
+        return COBS_DECODE_DATA;
+    }
+
+    return COBS_DECODE_NONE;
+}
+
+// Returns truth if the frame is valid and parsed successfully. False if the frame is not a valid Cyphal/CAN frame.
+bool rxTryParseHeader(const SerardMicrosecond  timestamp_usec,
+                      const uint8_t* const     payload,
+                      struct RxTransferModel* const   out)
+// bool rxTryParseHeader(struct SerardRxHeaderModel *header,
+//                       struct SerardTransferMetadata* const   out)
+{
+    SERARD_ASSERT(out != NULL);
+    SERARD_ASSERT(payload != NULL);
+
+    bool valid = false;
+    out->timestamp_usec = timestamp_usec;
+
+    // TODO: remove
+    // const struct FrameHeaderModel* const header = (const void *) payload;
+
+    valid = payload[HEADER_OFFSET_VERSION] == HEADER_VERSION;
+    out->priority = (enum SerardPriority) payload[HEADER_OFFSET_PRIORITY];
+    out->source_node_id = (SerardNodeID) littleToHost16(&payload[HEADER_OFFSET_SOURCE_ID]);
+    out->destination_node_id = (SerardNodeID) littleToHost16(&payload[HEADER_OFFSET_DEST_ID]);
+
+    uint16_t const data_specifier_snm = littleToHost16(&payload[HEADER_OFFSET_DATA_SPECIFIER]);
+    out->port_id = data_specifier_snm & DATA_SPECIFIER_PORT_MASK;
+    const bool snm = data_specifier_snm & SERVICE_NOT_MESSAGE;
+    const bool rnr = data_specifier_snm & REQUEST_NOT_RESPONSE;
+    if (snm) {
+        out->transfer_kind = rnr ? SerardTransferKindRequest : SerardTransferKindResponse;
+    } else {
+        out->transfer_kind = SerardTransferKindMessage;
+        valid = valid && !rnr;
+    }
+
+    out->transfer_id = littleToHost64(&payload[HEADER_OFFSET_TRANSFER_ID]);
+    uint32_t const frame_index_eot = littleToHost32(&payload[HEADER_OFFSET_FRAME_INDEX]);
+    const uint32_t frame_index = frame_index_eot & ~END_OF_TRANSFER;
+    const bool eot = (frame_index_eot & END_OF_TRANSFER) != 0;
+    valid = valid && (frame_index == 0);
+    valid = valid && eot;
+
+    // application of the CRC to the entire header shall yield zero
+    // for (size_t i = 0; i < HEADER_SIZE; i++) {
+    //     printf("%02x ", payload[i]);
+    // }
+    // printf("\n");
+
+    const HeaderCRC header_crc = headerCRCAdd(HEADER_CRC_INITIAL, HEADER_SIZE, (void *) payload);
+    valid = valid && (header_crc == HEADER_CRC_RESIDUE);
+
+    // out->payload_size = payload_size - HEADER_SIZE;
+    // if (out->payload_size > 0) {
+    //     out->payload = &payload[HEADER_SIZE];
+    // } else {
+    //     out->payload = NULL;
+    // }
+
+    // final validation
+    return valid;
+}
 // --------------------------------------------- PUBLIC API ---------------------------------------------
 
 struct Serard serardInit(const struct SerardMemoryResource memory_payload,
@@ -465,7 +676,7 @@ struct Serard serardInit(const struct SerardMemoryResource memory_payload,
         .node_id            = SERARD_NODE_ID_UNSET,
         .memory_payload     = memory_payload,
         .memory_rx_session  = memory_rx_session,
-        .rx_subscriptions   = {NULL},
+        .rx_subscriptions   = { NULL, NULL, NULL },
     };
 
     return serard;
@@ -478,94 +689,336 @@ int32_t serardTxPush(struct Serard* const                       ins,
                      void* const                                user_reference,
                      const SerardTxEmit                         emitter)
 {
-    SERARD_ASSERT(ins != NULL);
-    SERARD_ASSERT(metadata != NULL);
+    if ((ins == NULL) || (metadata == NULL) || (emitter == NULL))
+    {
+        return -SERARD_ERROR_ARGUMENT;
+    }
 
-    size_t header_payload_size = HEADER_SIZE + payload_size + TRANSFER_CRC_SIZE_BYTES;
-    size_t max_frame_size = cobsEncodingSize(header_payload_size) + 2U; // 2 bytes extra for frame delimiters
-    uint8_t* buffer = ins->memory_payload.allocate(ins->memory_payload.user_reference, max_frame_size);
-    if (buffer == NULL) {
+    const size_t header_payload_size = HEADER_SIZE + payload_size + TRANSFER_CRC_SIZE_BYTES;
+    const size_t max_frame_size = cobsEncodingSize(header_payload_size) + 2U; // 2 bytes extra for frame delimiters
+    uint8_t* const buffer = ins->memory_payload.allocate(ins->memory_payload.user_reference, max_frame_size);
+    if (buffer == NULL)
+    {
         return -SERARD_ERROR_MEMORY;
     }
 
     size_t buffer_offset = 0;
-
     buffer[buffer_offset++] = COBS_FRAME_DELIMITER;
-    struct CobsEncodeState cobs = cobsInit(&buffer[buffer_offset]);
+    struct CobsEncoder encoder = (struct CobsEncoder) { .loc = 1, .chunk = 0 };
+    uint8_t* const frame_start = &buffer[buffer_offset];
 
     uint8_t header[HEADER_SIZE];
-    size_t header_size = txMakeHeader(ins, metadata, header);
-    cobsEncode(&cobs, header, header_size);
+    txMakeHeader(ins, metadata, header);
+    cobsEncodeIncremental(&encoder, HEADER_SIZE, header, frame_start);
+    // printf("pre encoding header: ");
+    // for (size_t i = 0; i < HEADER_SIZE; i++) {
+    //     printf("%02x ", buffer[i]);
+    // }
+    // printf("\n");
 
     if (payload_size > 0) {
-        cobsEncode(&cobs, payload, payload_size);
+        cobsEncodeIncremental(&encoder, payload_size, payload, frame_start);
     }
     TransferCRC crc = transferCRCAdd(TRANSFER_CRC_INITIAL, payload_size, payload) ^ TRANSFER_CRC_OUTPUT_XOR;
-    cobsEncode(&cobs, (void *) &crc, TRANSFER_CRC_SIZE_BYTES);
+    cobsEncodeByte(&encoder, (uint8_t) ((crc >> BYTE0_OFFSET) & BYTE_MAX), frame_start);
+    cobsEncodeByte(&encoder, (uint8_t) ((crc >> BYTE1_OFFSET) & BYTE_MAX), frame_start);
+    cobsEncodeByte(&encoder, (uint8_t) ((crc >> BYTE2_OFFSET) & BYTE_MAX), frame_start);
+    cobsEncodeByte(&encoder, (uint8_t) ((crc >> BYTE3_OFFSET) & BYTE_MAX), frame_start);
 
-    uint8_t delimiter = COBS_FRAME_DELIMITER;
-    cobsEncode(&cobs, (void *) &delimiter, 1);
-    buffer_offset += cobs.loc;
+    cobsEncodeByte(&encoder, COBS_FRAME_DELIMITER, frame_start);
+    buffer_offset += encoder.loc;
 
     size_t bytes_transmitted = 0;
-    while (bytes_transmitted < buffer_offset) {
+    while (bytes_transmitted < buffer_offset)
+    {
         const size_t bytes_left = buffer_offset - bytes_transmitted;
         const uint8_t chunk_size = (bytes_left > 255) ? 255 : ((uint8_t) bytes_left);
         bool out = emitter(user_reference, chunk_size, &buffer[bytes_transmitted]);
-        if (!out) {
+        if (!out)
+        {
             ins->memory_payload.deallocate(ins->memory_payload.user_reference, max_frame_size, buffer);
             return 0;
         }
-
         bytes_transmitted += chunk_size;
     }
 
     ins->memory_payload.deallocate(ins->memory_payload.user_reference, max_frame_size, buffer);
-
-    return 1; // TODO: what to return?
+    return 1;
 }
 
-// int8_t serardRxAccept(Serard* const                ins,
-//                       SerardReassembler* const     reassembler,
-//                       const SerardMicrosecond      timestamp_usec,
-//                       size_t* const                inout_payload_size,
-//                       const uint8_t* const         payload,
-//                       SerardRxTransfer* const      out_transfer,
-//                       SerardRxSubscription** const out_subscription)
+// TODO: can we get rid of this?
+struct SerardReassembler serardReassemblerInit(void)
+{
+    struct SerardReassembler reassembler = {
+        .code = 0,
+        .copy = 0,
+        .state = STATE_REJECT,
+        .counter = 0,
+        .header = {0},
+        .sub = NULL,
+        .max_payload_size = 0,
+    };
+    return reassembler;
+};
+
+// SERARD_PRIVATE bool
+// rxAcceptHeaderField(struct SerardReassembler* const reassembler,
+//                     void *
+//                     uint8_t const num_bytes,
+//                     uint8_t const byte)
 // {
-//     int8_t ret = -SERARD_ERROR_INVALID_ARGUMENT;
-//     if ((ins != NULL) && (out_transfer != NULL) && ((payload != NULL) && (*inout_payload_size == 0))) {
-//         RxTransferModel model = {0};
-//         if (rxTryParseTransfer(timestamp_usec, payload, *inout_payload_size, &model)) {
-//             if ((model.destination_node_id == SERARD_NODE_ID_UNSET) || (model.destination_node_id == ins->node_id)) {
-//                 // This is the reason the function has a logarithmic time complexity of the number of subscriptions.
-//                 // Note also that this one of the two variable-complexity operations in the RX pipeline; the other one
-//                 // is memcpy(). Excepting these two cases, the entire RX pipeline contains neither loops nor recursion.
-//                 SerardRxSubscription* const sub = (SerardRxSubscription*) (void*) 
-//                     cavlSearch(&ins->rx_subscriptions[(size_t) model.transfer_kind],
-//                                &model.port_id,
-//                                &rxSubscriptionPredicateOnPortID,
-//                                NULL);
-//                 if (out_subscription != NULL) {
-//                     *out_subscription = sub;  // Expose selected instance to the caller.
-//                 }
-//                 if (sub != NULL) {
-//                     SERARD_ASSERT(sub->port_id == model.port_id);
-//                     ret = rxAcceptTransfer(ins, sub, &model, reassembler, out_transfer);
-//                 } else {
-//                     ret = 0;  // No matching subscription.
-//                 }
-//             } else {
-//                 ret = 0; // mis-addressed transfer
-//             }
-//         } else {
-//             ret = 0; // not a valid Cyphal/Serial input packet
-//         }
-//     }
 //
-//     SERARD_ASSERT(ret <= 1);
-//     return ret;
 // }
+//
+// SERARD_PRIVATE bool
+// rxAcceptHeader(const uint8_t* const header,
+//                struct SerardRxTransfer* const out_transfer)
+// {
+//     SERARD_ASSERT(header != NULL);
+//
+//     struct SerardTransferMetadata* const metadata = &out_transfer->metadata;
+// }
+
+// SERARD_PRIVATE void
+// rxAcceptHeaderField8(uint8_t* const field, uint8_t const byte_offset, uint8_t const byte)
+// {
+//     SERARD_ASSERT(byte_offset < 1);
+//     *field = byte;
+// }
+//
+// SERARD_PRIVATE void
+// rxAcceptHeaderField16(uint16_t* const field, uint8_t const byte_offset, uint8_t const byte)
+// {
+//     SERARD_ASSERT(byte_offset < 2);
+//     if (byte_offset > 0) {
+//         *field |= ((uint16_t) byte) << (byte_offset * BITS_PER_BYTE);
+//     } else {
+//         *field = byte;
+//     }
+// }
+//
+// SERARD_PRIVATE void
+// rxAcceptHeaderField32(uint32_t* const field, uint8_t const byte_offset, uint8_t const byte)
+// {
+//     SERARD_ASSERT(byte_offset < 4);
+//     if (byte_offset > 0) {
+//         *field |= ((uint32_t) byte) << (byte_offset * BITS_PER_BYTE);
+//     } else {
+//         *field = byte;
+//     }
+// }
+//
+// SERARD_PRIVATE void
+// rxAcceptHeaderField64(uint64_t* const field, uint8_t const byte_offset, uint8_t const byte)
+// {
+//     SERARD_ASSERT(byte_offset < 8);
+//     if (byte_offset > 0) {
+//         *field |= ((uint64_t) byte) << (byte_offset * BITS_PER_BYTE);
+//     } else {
+//         *field = byte;
+//     }
+// }
+
+// SERARD_PRIVATE void
+// rxAcceptHeaderByte(struct SerardRxHeaderModel* const model, uint8_t const offset, uint8_t const byte)
+// // rxAcceptHeaderByte(uint8_t* const header, uint8_t const offset, uint8_t const byte)
+// {
+//     // SERARD_ASSERT(header != 0);
+//     SERARD_ASSERT(offset < HEADER_SIZE);
+//     // TODO: this switch is a bit clunky, especially without case ranges
+//     // this should optimize well, but is there a solution with less branching still?
+//     switch (offset) {
+//         case HEADER_OFFSET_VERSION:
+//             rxAcceptHeaderField8(&model->version, offset - HEADER_OFFSET_VERSION, byte);
+//             break;
+//         case HEADER_OFFSET_PRIORITY:
+//             rxAcceptHeaderField8(&model->priority, offset - HEADER_OFFSET_PRIORITY, byte);
+//             break;
+//         case HEADER_OFFSET_SOURCE_ID:
+//         case (HEADER_OFFSET_SOURCE_ID + 1):
+//             rxAcceptHeaderField16(&model->source_node_id, offset - HEADER_OFFSET_SOURCE_ID, byte);
+//             break;
+//         case HEADER_OFFSET_DEST_ID:
+//         case (HEADER_OFFSET_DEST_ID + 1):
+//             rxAcceptHeaderField16(&model->destination_node_id, offset - HEADER_OFFSET_DEST_ID, byte);
+//             break;
+//         case HEADER_OFFSET_DATA_SPECIFIER:
+//         case (HEADER_OFFSET_DATA_SPECIFIER + 1):
+//             rxAcceptHeaderField16(&model->data_specifier_snm, offset - HEADER_OFFSET_DATA_SPECIFIER, byte);
+//             break;
+//         case HEADER_OFFSET_TRANSFER_ID:
+//         case (HEADER_OFFSET_TRANSFER_ID + 1):
+//         case (HEADER_OFFSET_TRANSFER_ID + 2):
+//         case (HEADER_OFFSET_TRANSFER_ID + 3):
+//         case (HEADER_OFFSET_TRANSFER_ID + 4):
+//         case (HEADER_OFFSET_TRANSFER_ID + 5):
+//         case (HEADER_OFFSET_TRANSFER_ID + 6):
+//         case (HEADER_OFFSET_TRANSFER_ID + 7):
+//             rxAcceptHeaderField64(&model->transfer_id, offset - HEADER_OFFSET_TRANSFER_ID, byte);
+//             break;
+//         case HEADER_OFFSET_FRAME_INDEX:
+//         case (HEADER_OFFSET_FRAME_INDEX + 1):
+//         case (HEADER_OFFSET_FRAME_INDEX + 2):
+//         case (HEADER_OFFSET_FRAME_INDEX + 3):
+//             rxAcceptHeaderField32(&model->frame_index_eot, offset - HEADER_OFFSET_FRAME_INDEX, byte);
+//             break;
+//         case HEADER_OFFSET_USER_DATA:
+//         case (HEADER_OFFSET_USER_DATA + 1):
+//             rxAcceptHeaderField16(&model->user_data, offset - HEADER_OFFSET_USER_DATA, byte);
+//             break;
+//         case HEADER_OFFSET_CRC:
+//             model->header_crc16_big_endian = (uint16_t) (byte << BITS_PER_BYTE);
+//             break;
+//         case (HEADER_OFFSET_CRC + 1):
+//             model->header_crc16_big_endian |= (byte);
+//             break;
+//     }
+// }
+
+int8_t serardRxAccept(struct Serard* const                ins,
+                      struct SerardReassembler* const     reassembler,
+                      SerardMicrosecond const      timestamp_usec,
+                      size_t* const                inout_payload_size,
+                      const uint8_t* const         payload,
+                      struct SerardRxTransfer* const      out_transfer,
+                      struct SerardRxSubscription** const out_subscription)
+{
+    const size_t in_payload_size = *inout_payload_size;
+    *inout_payload_size = 0;
+
+    // TODO: https://github.com/OpenCyphal/pycyphal/issues/112
+    for (size_t i = 0; i < in_payload_size; i++) {
+        // rxAcceptByte(reassembler, payload[i]);
+        uint8_t const raw_byte = payload[i];
+        uint8_t cobs_byte = raw_byte;
+        enum CobsDecodeResult const result = cobsDecodeByte(reassembler, &cobs_byte);
+        // printf("state: %d raw_byte: %d cobs_byte: %d result: %d\n", reassembler->state, raw_byte, cobs_byte, result);
+        switch ((enum ReassemblerState) reassembler->state) {
+            case STATE_REJECT:
+                if (result == COBS_DECODE_DELIMITER) {
+                    reassembler->state = (uint8_t) STATE_DELIMITER;
+                }
+                break;
+            case STATE_DELIMITER:
+                if (result != COBS_DECODE_DELIMITER) {
+                    reassembler->state = (uint8_t) STATE_HEADER;
+                    reassembler->counter = 0;
+                }
+                break;
+            case STATE_HEADER:
+                if (result == COBS_DECODE_DATA) {
+                    // rxAcceptHeaderByte(&reassembler->header, reassembler->counter, cobs_byte);
+                    reassembler->header[reassembler->counter] = cobs_byte;
+                    reassembler->counter++;
+                }
+
+                if (reassembler->counter >= HEADER_SIZE) {
+                    struct RxTransferModel model;
+                    if (rxTryParseHeader(timestamp_usec, reassembler->header, &model)) {
+                        // This is the reason the function has a logarithmic time complexity of the number of subscriptions.
+                        // Note also that this one of the two variable-complexity operations in the RX pipeline; the other one
+                        // is memcpy(). Excepting these two cases, the entire RX pipeline contains neither loops nor recursion.
+                        if ((model.destination_node_id == SERARD_NODE_ID_UNSET) || (model.destination_node_id == ins->node_id)) {
+                            struct SerardRxSubscription* const sub = (struct SerardRxSubscription*) (void*)
+                                cavlSearch((struct SerardTreeNode**) &ins->rx_subscriptions[(size_t) model.transfer_kind],
+                                           &model.port_id,
+                                           &rxSubscriptionPredicateOnPortID,
+                                           NULL);
+                            if (sub != NULL) {
+                                // found a subscription, so proceed with processing the payload
+                                reassembler->sub = sub;
+                                reassembler->state = (uint8_t) STATE_PAYLOAD;
+                                reassembler->counter = 0;
+
+                                // copy information into output transfer
+                                rxInitTransferMetadataFromModel(&model, &out_transfer->metadata);
+
+                                const size_t payload_extent = sub->extent + TRANSFER_CRC_SIZE_BYTES;
+                                reassembler->max_payload_size = cobsEncodingSize(payload_extent);
+                                out_transfer->payload_extent = reassembler->max_payload_size;
+                                SERARD_ASSERT(out_transfer->payload_extent > 0);
+                                out_transfer->payload = ins->memory_payload.allocate(ins->memory_payload.user_reference,
+                                                                                     out_transfer->payload_extent);
+                                if (out_transfer->payload == NULL) {
+                                    reassembler->state = (uint8_t) STATE_REJECT;
+                                    return -SERARD_ERROR_MEMORY;
+                                }
+                            } else {
+                                // we can discard the rest of this frame
+                                printf("no sub\n");
+                                reassembler->state = (uint8_t) STATE_REJECT;
+                            }
+                        } else {
+                            // mis-addressed transfer
+                            printf("wrong address\n");
+                            reassembler->state = (uint8_t) STATE_REJECT;
+                        }
+                    } else {
+                        // invalid frame header (including failed header CRC)
+                        printf("invalid header\n");
+                        reassembler->state = (uint8_t) STATE_REJECT;
+                        reassembler->sub = NULL;
+                    }
+                }
+                break;
+            case STATE_PAYLOAD:
+                if (result == COBS_DECODE_DATA) {
+                    if (reassembler->counter > reassembler->max_payload_size) {
+                        // payload exceeded extent, discard frame
+                        reassembler->state = (uint8_t) STATE_REJECT;
+                    }
+
+                    ((uint8_t*) out_transfer->payload)[reassembler->counter] = cobs_byte;
+                    reassembler->counter++;
+                } else if (result == COBS_DECODE_DELIMITER) {
+                    // TODO: verify payload crc
+                    reassembler->state = (uint8_t) STATE_DELIMITER;
+                    if (out_subscription != NULL) {
+                        *out_subscription = reassembler->sub;
+                    }
+                    if (i < (in_payload_size - 1)) {
+                        *inout_payload_size = i;
+                    }
+                    return 1;
+                }
+                break;
+        }
+    }
+
+    return 0;
+    // int8_t ret = -SERARD_ERROR_ARGUMENT;
+    // if ((ins != NULL) && (out_transfer != NULL) && ((payload != NULL) && (*inout_payload_size == 0))) {
+    //     struct RxTransferModel model = {0};
+    //     if (rxTryParseTransfer(timestamp_usec, payload, *inout_payload_size, &model)) {
+    //         if ((model.destination_node_id == SERARD_NODE_ID_UNSET) || (model.destination_node_id == ins->node_id)) {
+    //             // This is the reason the function has a logarithmic time complexity of the number of subscriptions.
+    //             // Note also that this one of the two variable-complexity operations in the RX pipeline; the other one
+    //             // is memcpy(). Excepting these two cases, the entire RX pipeline contains neither loops nor recursion.
+    //             struct SerardRxSubscription* const sub = (struct SerardRxSubscription*) (void*) 
+    //                 cavlSearch((struct SerardTreeNode**) &ins->rx_subscriptions[(size_t) model.transfer_kind],
+    //                            &model.port_id,
+    //                            &rxSubscriptionPredicateOnPortID,
+    //                            NULL);
+    //             if (out_subscription != NULL) {
+    //                 *out_subscription = sub;  // Expose selected instance to the caller.
+    //             }
+    //             if (sub != NULL) {
+    //                 SERARD_ASSERT(sub->port_id == model.port_id);
+    //                 // ret = rxAcceptTransfer(ins, sub, &model, reassembler, out_transfer);
+    //             } else {
+    //                 ret = 0;  // No matching subscription.
+    //             }
+    //         } else {
+    //             ret = 0; // mis-addressed transfer
+    //         }
+    //     } else {
+    //         ret = 0; // not a valid Cyphal/Serial input packet
+    //     }
+    // }
+    //
+    // SERARD_ASSERT(ret <= 1);
+    // return ret;
+}
 
 int8_t serardRxSubscribe(struct Serard* const               ins,
                          const enum SerardTransferKind      transfer_kind,

@@ -156,9 +156,14 @@ struct SerardRxTransfer
     /// The time system may be arbitrary as long as the clock is monotonic (steady).
     SerardMicrosecond timestamp_usec;
 
+    /// payload_size is the , while payload_extent is the size of the memory buffer allocated by
+    /// libserard to store the payload.
+    /// payload_size is guaranteed to be less than or equal to payload_extent.
     /// If the payload is empty (payload_size = 0), the payload pointer may be NULL.
     /// The application is required to deallocate the payload buffer after the transfer is processed.
+    /// Always de-allocate payload_extent bytes, NOT payload_size
     size_t payload_size;
+    size_t payload_extent;
     void*  payload;
 };
 
@@ -239,6 +244,20 @@ struct Serard
     struct SerardRxSubscription* rx_subscriptions[SERARD_NUM_TRANSFER_KINDS];
 };
 
+// TODO: documentation
+// struct SerardRxHeaderModel
+// {
+//     uint8_t version;
+//     uint8_t priority;
+//     uint16_t source_node_id;
+//     uint16_t destination_node_id;
+//     uint16_t data_specifier_snm;
+//     uint64_t transfer_id;
+//     uint32_t frame_index_eot;
+//     uint16_t user_data;
+//     uint16_t header_crc16_big_endian;
+// };
+
 /// Each redundant interface from which transfers are to be received needs to have a separate instance of this type.
 /// It keeps the state related to COBS decoding and CRC verification.
 /// There is no de-segmentation because in Cyphal/serial, the maximum frame size is unlimited.
@@ -248,6 +267,13 @@ struct SerardReassembler
 {
     uint8_t code;
     uint8_t copy;
+    uint8_t state;
+    uint8_t counter;
+    // TODO: can we (re)move this?
+    uint8_t header[24];
+    // struct SerardRxHeaderModel header;
+    struct SerardRxSubscription* sub;
+    size_t max_payload_size;
 };
 
 /// Construct a new library instance.
@@ -268,7 +294,10 @@ int32_t serardTxPush(struct Serard* const                       ins,
                      const SerardTxEmit                         emitter);
 
 /// TODO the docs are missing.
-/// If inout_payload_size is positive, the payload pointer shall be advanced by the negative payload size delta
+struct SerardReassembler serardReassemblerInit(void);
+
+/// TODO the docs are missing.
+/// If inout_payload_size is greater than zero, the payload pointer shall be advanced by the negative payload size delta
 /// and the function shall be invoked again. This condition is guaranteed to never occur if the input payload size
 /// does not exceed 32 bytes.
 int8_t serardRxAccept(struct Serard* const                ins,
