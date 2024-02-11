@@ -57,21 +57,19 @@ struct RxSession
     // bool              toggle                  = false;
 };
 
-// struct RxTransferModel
-// {
-//     CanardMicrosecond   timestamp_usec      = std::numeric_limits<std::uint64_t>::max();
-//     CanardPriority      priority            = CanardPriorityOptional;
-//     CanardTransferKind  transfer_kind       = CanardTransferKindMessage;
-//     CanardPortID        port_id             = std::numeric_limits<std::uint16_t>::max();
-//     CanardNodeID        source_node_id      = CANARD_NODE_ID_UNSET;
-//     CanardNodeID        destination_node_id = CANARD_NODE_ID_UNSET;
-//     CanardTransferID    transfer_id         = std::numeric_limits<std::uint8_t>::max();
-//     bool                start_of_transfer   = false;
-//     bool                end_of_transfer     = false;
-//     bool                toggle              = false;
-//     std::size_t         payload_size        = 0U;
-//     const std::uint8_t* payload             = nullptr;
-// };
+struct RxTransferModel
+{
+    SerardMicrosecond   timestamp_usec      = std::numeric_limits<std::uint64_t>::max();
+    SerardPriority      priority            = SerardPriorityOptional;
+    SerardTransferKind  transfer_kind       = SerardTransferKindMessage;
+    SerardPortID        port_id             = std::numeric_limits<std::uint16_t>::max();
+    SerardNodeID        source_node_id      = SERARD_NODE_ID_UNSET;
+    SerardNodeID        destination_node_id = SERARD_NODE_ID_UNSET;
+    SerardTransferID    transfer_id         = std::numeric_limits<std::uint8_t>::max();
+    std::size_t         payload_size        = 0U;
+    const std::uint8_t* payload             = nullptr;
+};
+
 struct FrameHeaderModel
 {
     uint8_t version                     = 0U;
@@ -93,8 +91,11 @@ auto crcAdd(const std::uint16_t crc, const std::size_t size, const void* const b
 auto txMakeSessionSpecifier(const enum SerardTransferKind transfer_kind, const SerardPortID port_id) -> std::uint16_t;
 auto txMakeHeader(const struct Serard* const serard,
                   const struct SerardTransferMetadata* const metadata,
-                  void* const buffer) -> std::uint8_t;
+                  void* const buffer) -> void;
 
+auto rxTryParseHeader(const SerardMicrosecond  timestamp_usec,
+                      const std::uint8_t* const     payload,
+                      struct RxTransferModel* const   out) -> bool;
 // auto rxTryParseFrame(const CanardMicrosecond  timestamp_usec,
 //                      const CanardFrame* const frame,
 //                      RxFrameModel* const      out_result) -> bool;

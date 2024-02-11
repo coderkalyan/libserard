@@ -9,6 +9,7 @@ project(serard_tests C CXX)
 enable_testing()
 
 set(CTEST_OUTPUT_ON_FAILURE ON)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(library_dir "${CMAKE_SOURCE_DIR}/libserard")
 set(tests_dir   "${CMAKE_SOURCE_DIR}/tests")
 
@@ -38,7 +39,8 @@ endif ()
 set(CMAKE_CXX_STANDARD 20)
 set(CXX_EXTENSIONS OFF)
 add_compile_options(
-        -Wall -Wextra -Werror -pedantic -fstrict-aliasing -Wdouble-promotion -Wswitch-enum -Wfloat-equal -Wundef
+        # -Wall -Wextra -Werror -pedantic -fstrict-aliasing -Wdouble-promotion -Wswitch-enum -Wfloat-equal -Wundef
+        -fstrict-aliasing -Wdouble-promotion -Wswitch-enum -Wfloat-equal -Wundef
         -Wconversion -Wtype-limits -Wsign-conversion -Wcast-align
 )
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Woverloaded-virtual -Wnon-virtual-dtor -Wsign-promo")

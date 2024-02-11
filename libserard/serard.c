@@ -197,6 +197,7 @@ SERARD_PRIVATE TransferCRC transferCRCAdd(const uint32_t crc, const size_t size,
 struct SerardInternalRxSession
 {
     struct SerardTreeNode      base;
+
     SerardMicrosecond   transfer_timestamp_usec;
     SerardNodeID        source_node_id;
     size_t              total_payload_size;
@@ -280,17 +281,17 @@ SERARD_PRIVATE void rxInitTransferMetadataFromModel(const struct RxTransferModel
     out_transfer->remote_node_id = frame->source_node_id;
     out_transfer->transfer_id    = frame->transfer_id;
 }
-//
-// SERARD_PRIVATE int8_t
-// rxSubscriptionPredicateOnSession(void* const user_reference,  // NOSONAR Cavl API requires pointer to non-const.
-//                                 const struct SerardTreeNode* const node)
-// {
-//     const SerardNodeID  sought    = *((const SerardNodeID*) user_reference);
-//     const SerardNodeID  other     = ((const struct SerardInternalRxSession*) (const void*) node)->source_node_id;
-//     static const int8_t NegPos[2] = {-1, +1};
-//     // Clang-Tidy mistakenly identifies a narrowing cast to int8_t here, which is incorrect.
-//     return (sought == other) ? 0 : NegPos[sought > other];  // NOLINT no narrowing conversion is taking place here
-// }
+
+SERARD_PRIVATE int8_t
+rxSubscriptionPredicateOnSession(void* const user_reference,  // NOSONAR Cavl API requires pointer to non-const.
+                                const struct SerardTreeNode* const node)
+{
+    const SerardNodeID  sought    = *((const SerardNodeID*) user_reference);
+    const SerardNodeID  other     = ((const struct SerardInternalRxSession*) (const void*) node)->source_node_id;
+    static const int8_t NegPos[2] = {-1, +1};
+    // Clang-Tidy mistakenly identifies a narrowing cast to int8_t here, which is incorrect.
+    return (sought == other) ? 0 : NegPos[sought > other];  // NOLINT no narrowing conversion is taking place here
+}
 
 SERARD_PRIVATE int8_t rxAcceptTransfer(struct Serard* const                   ins,
                                        struct SerardRxSubscription* const     subscription,
@@ -298,72 +299,71 @@ SERARD_PRIVATE int8_t rxAcceptTransfer(struct Serard* const                   in
                                        struct SerardReassembler* const        reassembler,
                                        struct SerardRxTransfer* const         out_transfer)
 {
-    // SERARD_ASSERT(ins != NULL);
-    // SERARD_ASSERT(subscription != NULL);
-    // SERARD_ASSERT(transfer != NULL);
-    // SERARD_ASSERT(transfer->payload != NULL);
-    //
-    // const struct SerardTransferMetadata* const metadata = &transfer->metadata;
-    // SERARD_ASSERT(metadata->transfer_id <= SERARD_TRANSFER_ID_MAX);
-    // SERARD_ASSERT(subscription->port_id == metadata->port_id);
-    // SERARD_ASSERT((SERARD_NODE_ID_UNSET == transfer->destination_node_id) || (ins->node_id == transfer->destination_node_id));
-    // SERARD_ASSERT(out_transfer != NULL);
-    //
-    // int8_t ret = 0;
-    // if (transfer->source_node_id <= SERARD_NODE_ID_MAX) {
-    //     SerardInternalRxSession* const rxs =
-    //         (SerardInternalRxSession*) ins->memory_allocate(ins, sizeof(SerardInternalRxSession));
-    //     const SerardTreeNode* const node = cavlSearch(&subscription->sessions,
-    //                                                   (void *) &transfer->source_node_id, // TODO: should this be void*?
-    //                                                   &rxSubscriptionPredicateOnSession,
-    //                                                   &avlTrivialFactory);
-    //
-    //     if (rxs != NULL) {
-    //         rxs->transfer_timestamp_usec = transfer->timestamp_usec;
-    //         rxs->source_node_id = transfer->source_node_id;
-    //         rxs->total_payload_size      = 0U;
-    //         rxs->payload_size            = 0U;
-    //         rxs->payload                 = NULL;
-    //         // rxs->calculated_crc          = CRC_INITIAL; // TODO
-    //         rxs->transfer_id             = transfer->transfer_id;
-    //     } else {
-    //         ret = -SERARD_ERROR_OUT_OF_MEMORY;
-    //     }
-    //     // There are two possible reasons why the session mserialay not exist: 1. OOM; 2. SOT-miss.
-    //     if (node != NULL) {
-    //         SERARD_ASSERT(ret == 0);
-    //         // TODO: does anything have to be updated?
-    //         // ret = rxSessionUpdate(ins,
-    //         //                       subscription->sessions[transfer->source_node_id],
-    //         //                       transfer,
-    //         //                       subscription->transfer_id_timeout_usec,
-    //         //                       subscription->extent,
-    //         //                       out_transfer);
-    //     }
-    // } else {
-    //     SERARD_ASSERT(transfer->source_node_id == SERARD_NODE_ID_UNSET);
-    //     // Anonymous transfers are stateless. No need to update the state machine, just blindly accept it.
-    //     // We have to copy the data into an allocated storage because the API expects it: the lifetime shall be
-    //     // independent of the input data and the memory shall be free-able.
-    //     const size_t payload_size =
-    //         (subscription->extent < transfer->payload_size) ? subscription->extent : transfer->payload_size;
-    //     void* const payload = ins->memory_allocate(ins, payload_size);
-    //     if (payload != NULL) {
-    //         rxInitTransferMetadataFromModel(transfer, &out_transfer->metadata);
-    //         out_transfer->timestamp_usec = transfer->timestamp_usec;
-    //         out_transfer->payload_size   = payload_size;
-    //         out_transfer->payload        = payload;
-    //         // Clang-Tidy raises an error recommending the use of memcpy_s() instead.
-    //         // We ignore it because the safe functions are poorly supported; reliance on them may limit the portability.
-    //         SERARD_UNUSED(memcpy(payload, transfer->payload, payload_size));  // NOLINT
-    //         ret = 1;
-    //     } else {
-    //         ret = -SERARD_ERROR_OUT_OF_MEMORY;
-    //     }
-    // }
-    //
-    // return ret;
-    return 0;
+    SERARD_ASSERT(ins != NULL);
+    SERARD_ASSERT(subscription != NULL);
+    SERARD_ASSERT(transfer != NULL);
+
+    const struct SerardTransferMetadata* const metadata = &transfer->metadata;
+    SERARD_ASSERT(metadata->transfer_id <= SERARD_TRANSFER_ID_MAX);
+    SERARD_ASSERT(subscription->port_id == metadata->port_id);
+    SERARD_ASSERT((SERARD_NODE_ID_UNSET == transfer->) || (ins->node_id == transfer->destination_node_id));
+    SERARD_ASSERT(out_transfer != NULL);
+
+    int8_t ret = 0;
+    if (metadata->remote_node_id <= SERARD_NODE_ID_MAX) {
+        struct SerardInternalRxSession* const rxs =
+            (struct SerardInternalRxSession*) ins->memory_rx_session.allocate(ins->memory_rx_session.user_reference,
+                                                                              sizeof(struct SerardInternalRxSession));
+        const struct SerardTreeNode* const node = cavlSearch((struct SerardTreeNode*) &subscription->sessions,
+                                                             (void *) &transfer->source_node_id, // TODO: should this be void*?
+                                                             &rxSubscriptionPredicateOnSession,
+                                                             &avlTrivialFactory);
+
+        if (rxs != NULL) {
+            rxs->transfer_timestamp_usec = transfer->timestamp_usec;
+            rxs->source_node_id = transfer->source_node_id;
+            rxs->total_payload_size      = 0U;
+            rxs->payload_size            = 0U;
+            rxs->payload                 = NULL;
+            // rxs->calculated_crc          = CRC_INITIAL; // TODO
+            rxs->transfer_id             = metadata->transfer_id;
+        } else {
+            ret = -SERARD_ERROR_MEMORY;
+        }
+        // There are two possible reasons why the session mserialay not exist: 1. OOM; 2. SOT-miss.
+        if (node != NULL) {
+            SERARD_ASSERT(ret == 0);
+            // TODO: does anything have to be updated?
+            // ret = rxSessionUpdate(ins,
+            //                       subscription->sessions[transfer->source_node_id],
+            //                       transfer,
+            //                       subscription->transfer_id_timeout_usec,
+            //                       subscription->extent,
+            //                       out_transfer);
+        }
+    } else {
+        SERARD_ASSERT(metadata->remote_node_id == SERARD_NODE_ID_UNSET);
+        // Anonymous transfers are stateless. No need to update the state machine, just blindly accept it.
+        // We have to copy the data into an allocated storage because the API expects it: the lifetime shall be
+        // independent of the input data and the memory shall be free-able.
+        const size_t payload_size =
+            (subscription->extent < transfer->payload_size) ? subscription->extent : transfer->payload_size;
+        void* const payload = ins->memory_rx_session.allocate(ins->memory_rx_session.user_reference, payload_size);
+        if (payload != NULL) {
+            rxInitTransferMetadataFromModel(transfer, &out_transfer->metadata);
+            out_transfer->timestamp_usec = transfer->timestamp_usec;
+            out_transfer->payload_size   = payload_size;
+            out_transfer->payload        = payload;
+            // Clang-Tidy raises an error recommending the use of memcpy_s() instead.
+            // We ignore it because the safe functions are poorly supported; reliance on them may limit the portability.
+            SERARD_UNUSED(memcpy(payload, transfer->payload, payload_size));  // NOLINT
+            ret = 1;
+        } else {
+            ret = -SERARD_ERROR_MEMORY;
+        }
+    }
+
+    return ret;
 }
 
 SERARD_PRIVATE int8_t
