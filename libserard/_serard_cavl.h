@@ -49,7 +49,7 @@ extern "C" {
 // ----------------------------------------         PUBLIC API SECTION         ----------------------------------------
 
 /// Modified for use with libserard: expose the Cavl structure via public API as SerardTreeNode.
-typedef SerardTreeNode Cavl;
+typedef struct SerardTreeNode Cavl;
 
 /// Returns POSITIVE if the search target is GREATER than the provided node, negative if smaller, zero on match (found).
 /// Values other than {-1, 0, +1} are not recommended to avoid overflow during the narrowing conversion of the result.
