@@ -30,3 +30,5 @@ cmake-build*/
 !**/.idea/dictionaries
 !**/.idea/dictionaries/*
 __pycache__/
+env/
+.cache/
