@@ -215,6 +215,10 @@ TEST_CASE("cobsEncodingSize")
     }
 }
 
+// TODO: cobs decoding
+// TODO: all sorts of CRC testing (can be pulled in)
+// TODO: endian conversion
+
 TEST_CASE("txMakeSessionSpecifier")
 {
     REQUIRE(0x1afe == exposed::txMakeSessionSpecifier(SerardTransferKindMessage, 0x1afe));
@@ -232,21 +236,55 @@ TEST_CASE("txMakeHeader")
         .rx_subscriptions  = {nullptr},
     };
 
-    struct SerardTransferMetadata metadata = {
-        .priority       = SerardPriorityNominal,
-        .transfer_kind  = SerardTransferKindMessage,
-        .port_id        = 1234,
-        .remote_node_id = 4321,
-        .transfer_id    = 0,
-    };
-
-    std::array<std::uint8_t, 24> buffer   = {0};
-    std::array<std::uint8_t, 24> expected = {0x01, 0x04, 0xD2, 0x04, 0xE1, 0x10, 0xD2, 0x04, 0x00, 0x00, 0x00, 0x00,
-                                             0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x80, 0x00, 0x00, 0x4A, 0xD6};
-    exposed::txMakeHeader(&serard, &metadata, &buffer);
-    for (std::size_t i = 0; i < 24; i++)
     {
-        REQUIRE(expected[i] == buffer[i]);
+        struct SerardTransferMetadata metadata = {
+            .priority       = SerardPriorityNominal,
+            .transfer_kind  = SerardTransferKindMessage,
+            .port_id        = 1234,
+            .remote_node_id = 4321,  // TODO: is this correct?
+            .transfer_id    = 0,
+        };
+
+        std::array<std::uint8_t, 24> buffer   = {0};
+        std::array<std::uint8_t, 24> expected = {0x01, 0x04, 0xD2, 0x04, 0xE1, 0x10, 0xD2, 0x04,
+                                                 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                                                 0x00, 0x00, 0x00, 0x80, 0x00, 0x00, 0x4A, 0xD6};
+        exposed::txMakeHeader(&serard, &metadata, &buffer);
+        REQUIRE(expected == buffer);
+    }
+
+    {
+        struct SerardTransferMetadata metadata = {
+            .priority       = SerardPriorityImmediate,
+            .transfer_kind  = SerardTransferKindResponse,
+            .port_id        = 1234,
+            .remote_node_id = 4321,
+            .transfer_id    = 0,
+        };
+
+        std::array<std::uint8_t, 24> buffer   = {0};
+        std::array<std::uint8_t, 24> expected = {0x01, 0x01, 0xD2, 0x04, 0xE1, 0x10, 0xD2, 0x84,
+                                                 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                                                 0x00, 0x00, 0x00, 0x80, 0x00, 0x00, 0xAC, 0x89};
+        exposed::txMakeHeader(&serard, &metadata, &buffer);
+        REQUIRE(expected == buffer);
+    }
+
+    {
+        struct SerardTransferMetadata metadata = {
+            .priority       = SerardPriorityOptional,
+            .transfer_kind  = SerardTransferKindRequest,
+            .port_id        = 5678,
+            .remote_node_id = 4321,
+            .transfer_id    = 0xCAFEB0BAUL,
+        };
+
+        std::array<std::uint8_t, 24> buffer   = {0};
+        std::array<std::uint8_t, 24> expected = {0x01, 0x07, 0xD2, 0x04, 0xE1, 0x10, 0x2E, 0xD6,
+                                                 0xBA, 0xB0, 0xFE, 0xCA, 0x00, 0x00, 0x00, 0x00,
+                                                 0x00, 0x00, 0x00, 0x80, 0x00, 0x00, 0x47, 0xE3};
+        exposed::txMakeHeader(&serard, &metadata, &buffer);
+        REQUIRE(expected == buffer);
     }
 }
 
@@ -283,26 +321,62 @@ TEST_CASE("serardTxPush")
         .deallocate     = &serardFree,
         .allocate       = &serardAlloc,
     };
-    struct Serard serard = serardInit(allocator, allocator);
-    serard.node_id       = 4321;
 
-    struct SerardTransferMetadata metadata = {
-        .priority       = SerardPriorityNominal,
-        .transfer_kind  = SerardTransferKindMessage,
-        .port_id        = 1234,
-        .remote_node_id = SERARD_NODE_ID_UNSET,
-        .transfer_id    = 0,
-    };
+    {
+        struct Serard serard = serardInit(allocator, allocator);
+        serard.node_id       = 4321;
 
-    buffer_t    result_buffer;
-    auto* const user_reference = reinterpret_cast<void*>(&result_buffer);
-    serardTxPush(&serard, &metadata, 0, nullptr, user_reference, &serardEmitter);
+        // TODO: reject illegal port ids
+        struct SerardTransferMetadata metadata = {
+            .priority       = SerardPrioritySlow,
+            .transfer_kind  = SerardTransferKindRequest,
+            .port_id        = 511,
+            .remote_node_id = 1234,
+            .transfer_id    = 0xCAFEB0BAUL,
+        };
 
-    // printf("push: ");
-    // for (unsigned char & it : result_buffer) {
-    //     printf("%02x ", it);
-    // }
-    // printf("\n");
+        buffer_t    result_buffer;
+        auto* const user_reference = reinterpret_cast<void*>(&result_buffer);
+        serardTxPush(&serard, &metadata, 0, nullptr, user_reference, &serardEmitter);
+
+        std::array<std::uint8_t, 31> expected = {0x00, 0x0d, 0x01, 0x06, 0xe1, 0x10, 0xd2, 0x04, 0xff, 0xc1, 0xba,
+                                                 0xb0, 0xfe, 0xca, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x02, 0x80,
+                                                 0x01, 0x03, 0x6a, 0xc6, 0x01, 0x01, 0x01, 0x01, 0x00};
+        REQUIRE(result_buffer.size() == expected.size());
+        for (std::size_t i = 0; i < result_buffer.size(); i++)
+        {
+            REQUIRE(result_buffer[i] == expected[i]);
+        }
+    }
+
+    {
+        struct Serard serard = serardInit(allocator, allocator);
+        serard.node_id       = 1234;
+
+        struct SerardTransferMetadata metadata = {
+            .priority       = SerardPriorityNominal,
+            .transfer_kind  = SerardTransferKindMessage,
+            .port_id        = 1234,
+            .remote_node_id = SERARD_NODE_ID_UNSET,
+            .transfer_id    = 0,
+        };
+
+        buffer_t    result_buffer;
+        auto* const user_reference = reinterpret_cast<void*>(&result_buffer);
+        // uavcan.primitive.String.1 containing string “012345678”
+        std::array<std::uint8_t, 9> payload = {'0', '1', '2', '3', '4', '5', '6', '7', '8'};
+        serardTxPush(&serard, &metadata, payload.size(), payload.data(), user_reference, &serardEmitter);
+
+        std::array<std::uint8_t, 40> expected = {0x00, 0x09, 0x01, 0x04, 0xd2, 0x04, 0xff, 0xff, 0xd2, 0x04,
+                                                 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01,
+                                                 0x02, 0x80, 0x01, 0x10, 0x08, 0x12, 0x30, 0x31, 0x32, 0x33,
+                                                 0x34, 0x35, 0x36, 0x37, 0x38, 0xd2, 0xee, 0x56, 0xc8, 0x00};
+        REQUIRE(result_buffer.size() == expected.size());
+        for (std::size_t i = 0; i < result_buffer.size(); i++)
+        {
+            REQUIRE(result_buffer[i] == expected[i]);
+        }
+    }
 }
 
 TEST_CASE("rxTryParseHeader")

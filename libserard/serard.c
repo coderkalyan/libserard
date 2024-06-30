@@ -736,7 +736,7 @@ int32_t serardTxPush(struct Serard* const                       ins,
     while (bytes_transmitted < buffer_offset)
     {
         const size_t  bytes_left = buffer_offset - bytes_transmitted;
-        const uint8_t chunk_size = (bytes_left > 255) ? 255 : ((uint8_t) bytes_left);
+        const uint8_t chunk_size = (bytes_left > BYTE_MAX) ? BYTE_MAX : ((uint8_t) bytes_left);
         bool          out        = emitter(user_reference, chunk_size, &buffer[bytes_transmitted]);
         if (!out)
         {
