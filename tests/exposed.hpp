@@ -15,7 +15,8 @@ namespace exposed
 {
 constexpr std::uint8_t COBS_FRAME_DELIMITER = 0U;
 
-using TransferCRC = std::uint16_t;
+using HeaderCRC   = std::uint16_t;
+using TransferCRC = std::uint32_t;
 
 struct CobsEncoder
 {
@@ -113,7 +114,19 @@ void   cobsEncodeIncremental(struct CobsEncoder* const encoder,
                              std::uint8_t* const       out_buffer);
 size_t cobsEncodingSize(size_t const payload);
 
-auto crcAdd(const std::uint16_t crc, const std::size_t size, const void* const bytes) -> std::uint16_t;
+constexpr TransferCRC TRANSFER_CRC_INITIAL    = 0xFFFFFFFFUL;
+constexpr TransferCRC TRANSFER_CRC_OUTPUT_XOR = 0xFFFFFFFFUL;
+
+void hostToLittle16(uint16_t const in, uint8_t* const out);
+void hostToLittle32(uint32_t const in, uint8_t* const out);
+void hostToLittle64(uint64_t const in, uint8_t* const out);
+auto littleToHost16(const uint8_t* const in) -> std::uint16_t;
+auto littleToHost32(const uint8_t* const in) -> std::uint32_t;
+auto littleToHost64(const uint8_t* const in) -> std::uint64_t;
+
+auto headerCRCAddByte(const std::uint16_t crc, const std::size_t size, const void* const bytes) -> std::uint16_t;
+auto headerCRCAdd(const HeaderCRC crc, const size_t size, const void* const data) -> HeaderCRC;
+auto transferCRCAdd(const uint32_t crc, const size_t size, const void* const data) -> TransferCRC;
 
 auto txMakeSessionSpecifier(const enum SerardTransferKind transfer_kind, const SerardPortID port_id) -> std::uint16_t;
 auto txMakeHeader(const struct Serard* const                 serard,

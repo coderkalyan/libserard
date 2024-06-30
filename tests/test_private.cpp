@@ -216,8 +216,79 @@ TEST_CASE("cobsEncodingSize")
 }
 
 // TODO: cobs decoding
-// TODO: all sorts of CRC testing (can be pulled in)
-// TODO: endian conversion
+TEST_CASE("HeaderCRC")
+{
+    exposed::HeaderCRC crc = 0xFFFFU;
+
+    crc = exposed::headerCRCAdd(crc, 1, "1");
+    crc = exposed::headerCRCAdd(crc, 1, "2");
+    crc = exposed::headerCRCAdd(crc, 1, "3");
+    REQUIRE(0x5BCEU == crc);
+    crc = exposed::headerCRCAdd(crc, 6, "456789");
+    REQUIRE(0x29B1U == crc);
+}
+
+static void testTransferCRC(void)
+{
+    exposed::TransferCRC crc = exposed::TRANSFER_CRC_INITIAL;
+    crc                      = exposed::transferCRCAdd(crc, 3, "123");
+    crc                      = exposed::transferCRCAdd(crc, 6, "456789");
+    REQUIRE(0x1CF96D7CUL == crc);
+    REQUIRE(0xE3069283UL == (crc ^ exposed::TRANSFER_CRC_OUTPUT_XOR));
+    crc = exposed::transferCRCAdd(crc,
+                                  4,
+                                  "\x83"  // Least significant byte first.
+                                  "\x92"
+                                  "\x06"
+                                  "\xE3");
+    REQUIRE(0xB798B438UL == crc);
+    REQUIRE(0x48674BC7UL == (crc ^ exposed::TRANSFER_CRC_OUTPUT_XOR));
+}
+
+TEST_CASE("hostToLittle")
+{
+    {
+        std::array<std::uint8_t, 2> buffer{};
+        exposed::hostToLittle16(0x0102, buffer.data());
+        const std::array<std::uint8_t, 2> expected = {0x02, 0x01};
+        REQUIRE(expected == buffer);
+    }
+
+    {
+        std::array<std::uint8_t, 4> buffer{};
+        exposed::hostToLittle32(0x01020304, buffer.data());
+        const std::array<std::uint8_t, 4> expected = {0x04, 0x03, 0x02, 0x01};
+        REQUIRE(expected == buffer);
+    }
+
+    {
+        std::array<std::uint8_t, 8> buffer{};
+        exposed::hostToLittle64(0x0102030405060708, buffer.data());
+        const std::array<std::uint8_t, 8> expected = {0x08, 0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01};
+        REQUIRE(expected == buffer);
+    }
+}
+
+TEST_CASE("littleToHost")
+{
+    {
+        std::array<std::uint8_t, 2> buffer = {0x02, 0x01};
+        const auto                  ret    = exposed::littleToHost16(buffer.data());
+        REQUIRE(0x0102 == ret);
+    }
+
+    {
+        std::array<std::uint8_t, 4> buffer = {0x04, 0x03, 0x02, 0x01};
+        const auto                  ret    = exposed::littleToHost32(buffer.data());
+        REQUIRE(0x01020304 == ret);
+    }
+
+    {
+        std::array<std::uint8_t, 8> buffer = {0x08, 0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01};
+        const auto                  ret    = exposed::littleToHost64(buffer.data());
+        REQUIRE(0x0102030405060708 == ret);
+    }
+}
 
 TEST_CASE("txMakeSessionSpecifier")
 {
