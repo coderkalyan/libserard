@@ -13,7 +13,27 @@
 /// Please keep them in sync with the library by manually updating as necessary.
 namespace exposed
 {
+constexpr std::uint8_t COBS_FRAME_DELIMITER = 0U;
+
 using TransferCRC = std::uint16_t;
+
+struct CobsEncoder
+{
+    std::size_t loc;
+    std::size_t chunk;
+
+    CobsEncoder()
+    {
+        loc   = 1U;
+        chunk = 0U;
+    }
+
+    CobsEncoder(std::size_t const _loc, std::size_t const _chunk)
+    {
+        loc   = _loc;
+        chunk = _chunk;
+    }
+};
 
 // struct TxItem final : CanardTxQueueItem
 // {
@@ -45,14 +65,14 @@ using TransferCRC = std::uint16_t;
 
 struct RxSession
 {
-    struct SerardTreeNode base                = {0};
-    SerardMicrosecond transfer_timestamp_usec = std::numeric_limits<std::uint64_t>::max();
-    SerardNodeID      source_node_id          = 0U;
-    std::size_t       total_payload_size      = 0U;
-    std::size_t       payload_size            = 0U;
-    std::uint8_t*     payload                 = nullptr;
+    struct SerardTreeNode base                    = {0};
+    SerardMicrosecond     transfer_timestamp_usec = std::numeric_limits<std::uint64_t>::max();
+    SerardNodeID          source_node_id          = 0U;
+    std::size_t           total_payload_size      = 0U;
+    std::size_t           payload_size            = 0U;
+    std::uint8_t*         payload                 = nullptr;
     // TransferCRC       calculated_crc          = 0U;
-    SerardTransferID  transfer_id             = std::numeric_limits<std::uint8_t>::max();
+    SerardTransferID transfer_id = std::numeric_limits<std::uint8_t>::max();
     // std::uint8_t      redundant_iface_index   = std::numeric_limits<std::uint8_t>::max();
     // bool              toggle                  = false;
 };
@@ -72,30 +92,37 @@ struct RxTransferModel
 
 struct FrameHeaderModel
 {
-    uint8_t version                     = 0U;
-    uint8_t priority                    = SerardPriorityOptional;
+    uint8_t  version                    = 0U;
+    uint8_t  priority                   = SerardPriorityOptional;
     uint16_t source_node_id             = SERARD_NODE_ID_UNSET;
     uint16_t destination_node_id        = SERARD_NODE_ID_UNSET;
     uint16_t data_specifier_snm         = 0U;
     uint64_t transfer_id                = std::numeric_limits<std::uint64_t>::max();
     uint32_t frame_index_eot            = 0U;
     uint16_t user_data                  = 0U;
-    uint8_t header_crc16_big_endian[2]  = {0};
+    uint8_t  header_crc16_big_endian[2] = {0};
 };
 
 // Extern C effectively discards the outer namespaces.
 extern "C" {
 
+void   cobsEncodeByte(struct CobsEncoder* const encoder, std::uint8_t const byte, std::uint8_t* const out_buffer);
+void   cobsEncodeIncremental(struct CobsEncoder* const encoder,
+                             size_t const              payload_size,
+                             const std::uint8_t* const payload,
+                             std::uint8_t* const       out_buffer);
+size_t cobsEncodingSize(size_t const payload);
+
 auto crcAdd(const std::uint16_t crc, const std::size_t size, const void* const bytes) -> std::uint16_t;
 
 auto txMakeSessionSpecifier(const enum SerardTransferKind transfer_kind, const SerardPortID port_id) -> std::uint16_t;
-auto txMakeHeader(const struct Serard* const serard,
+auto txMakeHeader(const struct Serard* const                 serard,
                   const struct SerardTransferMetadata* const metadata,
-                  void* const buffer) -> void;
+                  void* const                                buffer) -> void;
 
-auto rxTryParseHeader(const SerardMicrosecond  timestamp_usec,
+auto rxTryParseHeader(const SerardMicrosecond       timestamp_usec,
                       const std::uint8_t* const     payload,
-                      struct RxTransferModel* const   out) -> bool;
+                      struct RxTransferModel* const out) -> bool;
 // auto rxTryParseFrame(const CanardMicrosecond  timestamp_usec,
 //                      const CanardFrame* const frame,
 //                      RxFrameModel* const      out_result) -> bool;
