@@ -204,8 +204,7 @@ struct SerardInternalRxSession
     size_t            total_payload_size;
     size_t            payload_size;
     uint8_t*          payload;
-    // TODO: CRC
-    SerardTransferID transfer_id;
+    SerardTransferID  transfer_id;
 };
 
 // TODO: documentation
@@ -241,27 +240,10 @@ struct CobsEncoder
     size_t chunk;
 };
 
-#define REASSEMBLER_STATE_DELIMITER_SYNC 0U
-#define REASSEMBLER_STATE_DELIMITER_SKIP 1U
-#define REASSEMBLER_STATE_HEADER_VERSION 2U
-#define REASSEMBLER_STATE_HEADER_PRIORITY 3U
-#define REASSEMBLER_STATE_HEADER_SOURCE 4U
-#define REASSEMBLER_STATE_HEADER_DEST 5U
-#define REASSEMBLER_STATE_HEADER_SPECIFIER 6U
-#define REASSEMBLER_STATE_HEADER_TRANSFER 7U
-#define REASSEMBLER_STATE_HEADER_FRAME 8U
-#define REASSEMBLER_STATE_HEADER_USER 9U
-#define REASSEMBLER_STATE_HEADER_CRC 10U
-#define REASSEMBLER_STATE_HEADER 11U
-#define REASSEMBLER_STATE_PAYLOAD 12U
-
-enum ReassemblerState
-{
-    STATE_REJECT = 0U,
-    STATE_DELIMITER,
-    STATE_HEADER,
-    STATE_PAYLOAD,
-};
+#define STATE_REJECT 0U
+#define STATE_DELIMITER 1U
+#define STATE_HEADER 2U
+#define STATE_PAYLOAD 3U
 
 enum CobsDecodeResult
 {
@@ -878,8 +860,7 @@ int8_t serardRxAccept(struct Serard* const                ins,
     {
         uint8_t                     cobs_byte = payload[i];
         const enum CobsDecodeResult result    = cobsDecodeByte(reassembler, &cobs_byte);
-        const enum ReassemblerState state     = (enum ReassemblerState) reassembler->state;
-        // TODO: probably just use typedefs and defines for state enum
+        const uint8_t               state     = reassembler->state;
 
         // consume without updating the state machine, these are not
         // part of the original bytestream
@@ -896,7 +877,7 @@ int8_t serardRxAccept(struct Serard* const                ins,
             // discard incoming bytes until a delimiter is detected
             if (delim)
             {
-                reassembler->state = (uint8_t) STATE_DELIMITER;
+                reassembler->state = STATE_DELIMITER;
             }
             break;
         case STATE_DELIMITER:
@@ -904,7 +885,7 @@ int8_t serardRxAccept(struct Serard* const                ins,
             // then start latching the header
             if (!delim)
             {
-                reassembler->state     = (uint8_t) STATE_HEADER;
+                reassembler->state     = STATE_HEADER;
                 reassembler->header[0] = cobs_byte;
                 reassembler->counter   = 1;
             }
@@ -914,7 +895,7 @@ int8_t serardRxAccept(struct Serard* const                ins,
             // as invalid and discard the transfer, resetting the state machine
             if (delim)
             {
-                reassembler->state = (uint8_t) STATE_DELIMITER;
+                reassembler->state = STATE_DELIMITER;
                 break;
             }
 
@@ -926,18 +907,18 @@ int8_t serardRxAccept(struct Serard* const                ins,
             if (ret < 0)
             {
                 // rx pipeline encountered error
-                reassembler->state = (uint8_t) STATE_REJECT;
+                reassembler->state = STATE_REJECT;
                 return ret;
             }
             else if (ret == 1)
             {
                 // invalid or mis-addressed header, reject rest of frame
-                reassembler->state = (uint8_t) STATE_REJECT;
+                reassembler->state = STATE_REJECT;
             }
             else if (ret == 2)
             {
                 // valid header, continue with payload
-                reassembler->state = (uint8_t) STATE_PAYLOAD;
+                reassembler->state = STATE_PAYLOAD;
             }
             break;
         case STATE_PAYLOAD:
@@ -946,7 +927,7 @@ int8_t serardRxAccept(struct Serard* const                ins,
             // and bail to limit memory usage
             if (delim)
             {
-                reassembler->state = (uint8_t) STATE_DELIMITER;
+                reassembler->state = STATE_DELIMITER;
                 if (rxAcceptTransfer(ins, out_transfer, reassembler, timestamp_usec))
                 {
                     *inout_payload_size = in_payload_size - i - 1;
@@ -961,12 +942,14 @@ int8_t serardRxAccept(struct Serard* const                ins,
             if (reassembler->counter >= reassembler->max_payload_size)
             {
                 // payload exceeded extent, discard frame
-                reassembler->state = (uint8_t) STATE_REJECT;
+                reassembler->state = STATE_REJECT;
                 break;
             }
 
-            // TODO: change payload to uint8_t*
-            ((uint8_t*) out_transfer->payload)[reassembler->counter++] = cobs_byte;
+            uint8_t* const payload = (uint8_t*) &out_transfer->payload[reassembler->counter];
+            *payload               = cobs_byte;
+            reassembler->counter++;
+            break;
         }
     }
 
