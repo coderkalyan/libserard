@@ -104,6 +104,21 @@ struct FrameHeaderModel
     uint8_t  header_crc16_big_endian[2] = {0};
 };
 
+enum class ReassemblerState
+{
+    REJECT = 0U,
+    DELIMITER,
+    HEADER,
+    PAYLOAD,
+};
+
+enum class CobsDecodeResult
+{
+    DELIMITER = 0U,
+    NONE,
+    DATA,
+};
+
 // Extern C effectively discards the outer namespaces.
 extern "C" {
 
@@ -113,6 +128,7 @@ void   cobsEncodeIncremental(struct CobsEncoder* const encoder,
                              const std::uint8_t* const payload,
                              std::uint8_t* const       out_buffer);
 size_t cobsEncodingSize(size_t const payload);
+auto   cobsDecodeByte(struct SerardReassembler* const reassembler, uint8_t* const inout_byte) -> CobsDecodeResult;
 
 constexpr TransferCRC TRANSFER_CRC_INITIAL    = 0xFFFFFFFFUL;
 constexpr TransferCRC TRANSFER_CRC_OUTPUT_XOR = 0xFFFFFFFFUL;
