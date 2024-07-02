@@ -244,20 +244,6 @@ struct Serard
     struct SerardRxSubscription* rx_subscriptions[SERARD_NUM_TRANSFER_KINDS];
 };
 
-// TODO: documentation
-// struct SerardRxHeaderModel
-// {
-//     uint8_t version;
-//     uint8_t priority;
-//     uint16_t source_node_id;
-//     uint16_t destination_node_id;
-//     uint16_t data_specifier_snm;
-//     uint64_t transfer_id;
-//     uint32_t frame_index_eot;
-//     uint16_t user_data;
-//     uint16_t header_crc16_big_endian;
-// };
-
 /// Each redundant interface from which transfers are to be received needs to have a separate instance of this type.
 /// It keeps the state related to COBS decoding and CRC verification.
 /// There is no de-segmentation because in Cyphal/serial, the maximum frame size is unlimited.
@@ -273,7 +259,7 @@ struct SerardReassembler
     uint8_t header[24];
     // struct SerardRxHeaderModel header;
     struct SerardRxSubscription* sub;
-    size_t max_payload_size;
+    size_t                       max_payload_size;
 };
 
 /// Construct a new library instance.
