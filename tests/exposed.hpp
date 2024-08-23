@@ -82,44 +82,46 @@ constexpr TransferCRC TRANSFER_CRC_OUTPUT_XOR = 0xFFFFFFFFUL;
 // Extern C effectively discards the outer namespaces.
 extern "C" {
 
-auto headerCRCAddByte(const HeaderCRC crc, const std::uint8_t byte) -> HeaderCRC;
-auto headerCRCAdd(const HeaderCRC crc, const std::size_t size, const void* const data) -> HeaderCRC;
-auto transferCRCAddByte(const TransferCRC crc, const std::uint8_t byte) -> TransferCRC;
-auto transferCRCAdd(const TransferCRC crc, const std::size_t size, const void* const data) -> TransferCRC;
+[[nodiscard]] auto headerCRCAddByte(const HeaderCRC crc, const std::uint8_t byte) -> HeaderCRC;
+[[nodiscard]] auto headerCRCAdd(const HeaderCRC crc, const std::size_t size, const void* const data) -> HeaderCRC;
+[[nodiscard]] auto transferCRCAddByte(const TransferCRC crc, const std::uint8_t byte) -> TransferCRC;
+[[nodiscard]] auto transferCRCAdd(const TransferCRC crc, const std::size_t size, const void* const data) -> TransferCRC;
 
 void cobsEncodeByte(struct CobsEncoder* const encoder, std::uint8_t const byte, std::uint8_t* const out_buffer);
 void cobsEncodeIncremental(struct CobsEncoder* const encoder,
                            std::size_t const         payload_size,
                            const std::uint8_t* const payload,
                            std::uint8_t* const       out_buffer);
-auto cobsEncodingSize(std::size_t const payload) -> std::size_t;
-auto cobsDecodeByte(struct SerardReassembler* const reassembler, uint8_t* const inout_byte) -> CobsDecodeResult;
+[[nodiscard]] auto cobsEncodingSize(std::size_t const payload) -> std::size_t;
+[[nodiscard]] auto cobsDecodeByte(struct SerardReassembler* const reassembler,
+                                  uint8_t* const                  inout_byte) -> CobsDecodeResult;
 
-void hostToLittle16(uint16_t const in, uint8_t* const out);
-void hostToLittle32(uint32_t const in, uint8_t* const out);
-void hostToLittle64(uint64_t const in, uint8_t* const out);
-auto littleToHost16(const uint8_t* const in) -> std::uint16_t;
-auto littleToHost32(const uint8_t* const in) -> std::uint32_t;
-auto littleToHost64(const uint8_t* const in) -> std::uint64_t;
+void               hostToLittle16(uint16_t const in, uint8_t* const out);
+void               hostToLittle32(uint32_t const in, uint8_t* const out);
+void               hostToLittle64(uint64_t const in, uint8_t* const out);
+[[nodiscard]] auto littleToHost16(const uint8_t* const in) -> std::uint16_t;
+[[nodiscard]] auto littleToHost32(const uint8_t* const in) -> std::uint32_t;
+[[nodiscard]] auto littleToHost64(const uint8_t* const in) -> std::uint64_t;
 
-auto txMakeSessionSpecifier(const enum SerardTransferKind transfer_kind, const SerardPortID port_id) -> std::uint16_t;
-auto txMakeHeader(const struct Serard* const                 serard,
-                  const struct SerardTransferMetadata* const metadata,
-                  void* const                                buffer) -> void;
+[[nodiscard]] auto txMakeSessionSpecifier(const enum SerardTransferKind transfer_kind,
+                                          const SerardPortID            port_id) -> std::uint16_t;
+void               txMakeHeader(const struct Serard* const                 serard,
+                                const struct SerardTransferMetadata* const metadata,
+                                void* const                                buffer);
 
-void rxInitTransferMetadataFromModel(const struct RxTransferModel* const  frame,
-                                     struct SerardTransferMetadata* const out_transfer);
-auto rxTryParseHeader(const SerardMicrosecond       timestamp_usec,
-                      const std::uint8_t* const     payload,
-                      struct RxTransferModel* const out) -> bool;
-auto rxTryValidateHeader(struct Serard* const            ins,
-                         struct SerardReassembler* const reassembler,
-                         const SerardMicrosecond         timestamp_usec,
-                         struct SerardRxTransfer* const  out_transfer) -> std::int8_t;
-auto rxAcceptTransfer(struct Serard* const            ins,
-                      struct SerardRxTransfer* const  transfer,
-                      struct SerardReassembler* const reassembler,
-                      const SerardMicrosecond         timestamp_usec) -> bool;
+void               rxInitTransferMetadataFromModel(const struct RxTransferModel* const  frame,
+                                                   struct SerardTransferMetadata* const out_transfer);
+[[nodiscard]] auto rxTryParseHeader(const SerardMicrosecond       timestamp_usec,
+                                    const std::uint8_t* const     payload,
+                                    struct RxTransferModel* const out) -> bool;
+[[nodiscard]] auto rxTryValidateHeader(struct Serard* const            ins,
+                                       struct SerardReassembler* const reassembler,
+                                       const SerardMicrosecond         timestamp_usec,
+                                       struct SerardRxTransfer* const  out_transfer) -> std::int8_t;
+[[nodiscard]] auto rxAcceptTransfer(struct Serard* const            ins,
+                                    struct SerardRxTransfer* const  transfer,
+                                    struct SerardReassembler* const reassembler,
+                                    const SerardMicrosecond         timestamp_usec) -> bool;
 //
 // auto rxSessionWritePayload(CanardInstance* const ins,
 //                            RxSession* const      rxs,

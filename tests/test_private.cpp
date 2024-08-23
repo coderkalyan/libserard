@@ -511,29 +511,29 @@ TEST_CASE("rxTryParseHeader")
     }
 
     {
-        std::array<std::uint8_t, 24> buffer = {0x01, 0x01, 0xD2, 0x04, 0xE1, 0x10, 0xD2, 0x84, 0x00, 0x00, 0x00, 0x00,
-                                               0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x80, 0x00, 0x00, 0xAC, 0x89};
+        std::array<std::uint8_t, 24> buffer = {0x01, 0x01, 0xD2, 0x04, 0xE1, 0x10, 0x7B, 0x80, 0x00, 0x00, 0x00, 0x00,
+                                               0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x80, 0x00, 0x00, 0xC0, 0xFF};
         const bool                   valid  = exposed::rxTryParseHeader(0x12345678, buffer.begin(), &out);
         REQUIRE(valid);
         REQUIRE(out.transfer_id == 0);
         REQUIRE(out.transfer_kind == SerardTransferKindResponse);
         REQUIRE(out.destination_node_id == 4321);
         REQUIRE(out.source_node_id == 1234);
-        REQUIRE(out.port_id == 1234);  // TODO: illegal
+        REQUIRE(out.port_id == 123);
         REQUIRE(out.priority == SerardPriorityImmediate);
         REQUIRE(out.timestamp_usec == 0x12345678);
     }
 
     {
-        std::array<std::uint8_t, 24> buffer = {0x01, 0x07, 0xD2, 0x04, 0xE1, 0x10, 0x2E, 0xD6, 0xBA, 0xB0, 0xFE, 0xCA,
-                                               0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x80, 0x00, 0x00, 0x47, 0xE3};
+        std::array<std::uint8_t, 24> buffer = {0x01, 0x07, 0xD2, 0x04, 0xE1, 0x10, 0xEA, 0xC0, 0xBA, 0xB0, 0xFE, 0xCA,
+                                               0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x80, 0x00, 0x00, 0xDB, 0x89};
         const bool                   valid  = exposed::rxTryParseHeader(1, buffer.begin(), &out);
         REQUIRE(valid);
         REQUIRE(out.transfer_id == 0xCAFEB0BAUL);
         REQUIRE(out.transfer_kind == SerardTransferKindRequest);
         REQUIRE(out.destination_node_id == 4321);
         REQUIRE(out.source_node_id == 1234);
-        REQUIRE(out.port_id == 5678);  // TODO: illegal
+        REQUIRE(out.port_id == 234);
         REQUIRE(out.priority == SerardPriorityOptional);
         REQUIRE(out.timestamp_usec == 1);
     }
@@ -839,6 +839,13 @@ TEST_CASE("serardRxAcceptInternal")
     }
 
     // TODO: make all of these reordered constant first
+}
+
+TEST_CASE("rxInitTransferMetaDataFromModel")
+{
+    exposed::RxTransferModel model{
+
+    };
 }
 
 TEST_CASE("serardRxAccept")

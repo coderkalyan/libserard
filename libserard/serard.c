@@ -23,7 +23,7 @@
 #endif
 
 /// This macro is needed for testing and for library development.
-/// TODO
+/// TODO: fix this
 // #ifndef SERARD_PRIVATE
 // #    define SERARD_PRIVATE static inline
 // #endif
@@ -193,20 +193,26 @@ SERARD_PRIVATE TransferCRC transferCRCAdd(const uint32_t crc, const size_t size,
     return out;
 }
 
-// TODO: documentation
+// TODO: documentation, size
+/// The memory requirement model provided in the documentation assumes that the maximum size of this structure never
+/// exceeds XX bytes on any conventional platform.
+/// A user that needs a detailed analysis of the worst-case memory consumption may compute the size of this structure
+/// for the particular platform at hand manually or by evaluating its sizeof().
+/// The fields are ordered to minimize the amount of padding on all conventional platforms.
 struct SerardInternalRxSession
 {
     struct SerardTreeNode base;
 
-    SerardMicrosecond transfer_timestamp_usec;
-    SerardNodeID      source_node_id;
+    // TODO: do we need this?
+    SerardMicrosecond transfer_timestamp_usec;  ///< Timestamp of the last received start-of-transfer.
     size_t            total_payload_size;
+    SerardNodeID      source_node_id;
     size_t            payload_size;
     uint8_t*          payload;
     SerardTransferID  transfer_id;
 };
 
-// TODO: documentation
+/// High-level transfer model.
 struct RxTransferModel
 {
     SerardMicrosecond       timestamp_usec;
@@ -494,8 +500,8 @@ bool rxTryParseHeader(const SerardMicrosecond       timestamp_usec,
 
     uint16_t const data_specifier_snm = littleToHost16(&payload[HEADER_OFFSET_DATA_SPECIFIER]);
     out->port_id                      = data_specifier_snm & DATA_SPECIFIER_PORT_MASK;
-    const bool snm                    = data_specifier_snm & SERVICE_NOT_MESSAGE;
-    const bool rnr                    = data_specifier_snm & REQUEST_NOT_RESPONSE;
+    const bool snm                    = (data_specifier_snm & SERVICE_NOT_MESSAGE) != 0;
+    const bool rnr                    = (data_specifier_snm & REQUEST_NOT_RESPONSE) != 0;
     if (snm)
     {
         out->transfer_kind = rnr ? SerardTransferKindRequest : SerardTransferKindResponse;
@@ -518,9 +524,12 @@ bool rxTryParseHeader(const SerardMicrosecond       timestamp_usec,
     // application of the CRC to the entire header shall yield zero
     const HeaderCRC header_crc = headerCRCAdd(HEADER_CRC_INITIAL, HEADER_SIZE, (void*) payload);
     valid                      = valid && (header_crc == HEADER_CRC_RESIDUE);
+    // printf("crc valid: %d %04x %02x%02x\n",
+    //        valid,
+    //        headerCRCAdd(HEADER_CRC_INITIAL, HEADER_SIZE_NO_CRC, (void*) payload),
+    //        payload[HEADER_OFFSET_CRC],
+    //        payload[HEADER_OFFSET_CRC + 1]);
 
-    // final validation
-    // TODO: all enums and expected values in range
     return valid;
 }
 
@@ -764,16 +773,34 @@ struct Serard serardInit(const struct SerardMemoryResource memory_payload,
     return serard;
 }
 
-int32_t serardTxPush(struct Serard* const                       ins,
-                     const struct SerardTransferMetadata* const metadata,
-                     const size_t                               payload_size,
-                     const void* const                          payload,
-                     void* const                                user_reference,
-                     const SerardTxEmit                         emitter)
+int8_t serardTxPush(struct Serard* const                       ins,
+                    const struct SerardTransferMetadata* const metadata,
+                    const size_t                               payload_size,
+                    const void* const                          payload,
+                    void* const                                user_reference,
+                    const SerardTxEmit                         emitter)
 {
     if ((ins == NULL) || (metadata == NULL) || (emitter == NULL))
     {
         return -SERARD_ERROR_ARGUMENT;
+    }
+    if ((metadata->priority > SERARD_PRIORITY_MAX) || (metadata->transfer_kind > SERARD_TRANSFER_KIND_MAX))
+    {
+        return -SERARD_ERROR_ARGUMENT;
+    }
+    if (SerardTransferKindMessage == metadata->transfer_kind)
+    {
+        if (metadata->port_id > SERARD_SUBJECT_ID_MAX)
+        {
+            return -SERARD_ERROR_ARGUMENT;
+        }
+    }
+    else
+    {
+        if (metadata->port_id > SERARD_SERVICE_ID_MAX)
+        {
+            return -SERARD_ERROR_ARGUMENT;
+        }
     }
 
     const size_t   header_payload_size = HEADER_SIZE + payload_size + TRANSFER_CRC_SIZE_BYTES;
@@ -941,9 +968,8 @@ int8_t serardRxAccept(struct Serard* const                ins,
                 break;
             }
 
-            uint8_t* const payload = (uint8_t*) &out_transfer->payload[reassembler->counter];
-            *payload               = cobs_byte;
-            reassembler->counter++;
+            uint8_t* const payload          = (uint8_t*) out_transfer->payload;
+            payload[reassembler->counter++] = cobs_byte;
             break;
         }
     }

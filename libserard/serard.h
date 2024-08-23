@@ -47,6 +47,7 @@ extern "C" {
 #define SERARD_SERVICE_ID_MAX 511U
 #define SERARD_NODE_ID_MAX 0xFFFEU
 #define SERARD_PRIORITY_MAX 7U
+#define SERARD_TRANSFER_KIND_MAX 2U
 // TODO: probably incorrect max?
 #define SERARD_TRANSFER_ID_BIT_LENGTH 5U
 #define SERARD_TRANSFER_ID_MAX ((1U << SERARD_TRANSFER_ID_BIT_LENGTH) - 1U)
@@ -272,12 +273,12 @@ struct Serard serardInit(const struct SerardMemoryResource memory_payload,
 
 /// TODO the docs are missing.
 /// Negative -- invalid argument; zero -- emitter failure; positive -- success.
-int32_t serardTxPush(struct Serard* const                       ins,
-                     const struct SerardTransferMetadata* const metadata,
-                     const size_t                               payload_size,
-                     const void* const                          payload,
-                     void* const                                user_reference,
-                     const SerardTxEmit                         emitter);
+int8_t serardTxPush(struct Serard* const                       ins,
+                    const struct SerardTransferMetadata* const metadata,
+                    const size_t                               payload_size,
+                    const void* const                          payload,
+                    void* const                                user_reference,
+                    const SerardTxEmit                         emitter);
 
 /// TODO the docs are missing.
 struct SerardReassembler serardReassemblerInit(void);

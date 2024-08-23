@@ -83,7 +83,7 @@ endfunction()
 # Disable missing declaration warning to allow exposure of private definitions.
 gen_test_matrix(test_private
         "${tests_dir}/test_private.cpp"
-        "-DSERARD_CONFIG_HEADER=\"${CMAKE_CURRENT_SOURCE_DIR}/serard_config_private.h\""
+        "-DSERARD_CONFIG_HEADER=\"${CMAKE_CURRENT_SOURCE_DIR}/tests/serard_config_private.h\""
         "-Wno-missing-declarations")
 
 gen_test_matrix(test_public

@@ -55,7 +55,8 @@ TEST_CASE("serardTxPush")
         buffer_t    result_buffer;
         auto* const user_reference = reinterpret_cast<void*>(&result_buffer);
         // TODO: look at return result ([[nodiscard]])
-        serardTxPush(&serard, &metadata, 0, nullptr, user_reference, &serardEmitter);
+        const auto ret = serardTxPush(&serard, &metadata, 0, nullptr, user_reference, &serardEmitter);
+        REQUIRE(ret > 0);
 
         std::array<std::uint8_t, 31> expected = {0x00, 0x0d, 0x01, 0x06, 0xe1, 0x10, 0xd2, 0x04, 0xff, 0xc1, 0xba,
                                                  0xb0, 0xfe, 0xca, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x02, 0x80,
