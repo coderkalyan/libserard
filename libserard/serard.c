@@ -203,13 +203,11 @@ struct SerardInternalRxSession
 {
     struct SerardTreeNode base;
 
-    // TODO: do we need this?
-    SerardMicrosecond transfer_timestamp_usec;  ///< Timestamp of the last received start-of-transfer.
-    size_t            total_payload_size;
+    SerardMicrosecond transfer_timestamp_usec;  ///< Timestamp of the last received transfer.
     SerardNodeID      source_node_id;
-    size_t            payload_size;
     uint8_t*          payload;
     SerardTransferID  transfer_id;
+    uint8_t           redundant_transport_index;  ///< Arbitrary value in [0, 255].
 };
 
 /// High-level transfer model.
@@ -632,56 +630,34 @@ SERARD_PRIVATE bool rxAcceptTransfer(struct Serard* const            ins,
 /// are given and the particular algorithms are left to be implementation-defined. Such abstract approach is much
 /// advantageous because it allows implementers to choose whatever solution works best for the specific application at
 /// hand, while the wire compatibility is still guaranteed by the high-level requirements given in the specification.
-// SERARD_PRIVATE int8_t rxSessionUpdate(struct Serard* const          ins,
-//                                       struct SerardInternalRxSession* const rxs,
-//                                       const struct RxTransferModel* const      frame,
-//                                       const uint8_t                  redundant_transport_index,
-//                                       const SerardMicrosecond        transfer_id_timeout_usec,
-//                                       const size_t                   extent)
-//                                       // struct SerardRxTransfer* const        out_transfer)
-// {
-//     SERARD_ASSERT(ins != NULL);
-//     SERARD_ASSERT(rxs != NULL);
-//     SERARD_ASSERT(frame != NULL);
-//     // SERARD_ASSERT(out_transfer != NULL);
-//     SERARD_ASSERT(rxs->transfer_id <= SERARD_TRANSFER_ID_MAX);
-//     SERARD_ASSERT(frame->transfer_id <= SERARD_TRANSFER_ID_MAX);
-//
-//     const bool tid_timed_out = (frame->timestamp_usec > rxs->transfer_timestamp_usec) &&
-//                                ((frame->timestamp_usec - rxs->transfer_timestamp_usec) > transfer_id_timeout_usec);
-//
-//     const bool not_previous_tid = rxComputeTransferIDDifference(rxs->transfer_id, frame->transfer_id) > 1;
-//
-//     const bool need_restart = tid_timed_out || ((rxs->redundant_transport_index == redundant_transport_index) &&
-//                                                 frame->start_of_transfer && not_previous_tid);
-//
-//     if (need_restart)
-//     {
-//         rxs->total_payload_size        = 0U;
-//         rxs->payload_size              = 0U;
-//         rxs->calculated_crc            = CRC_INITIAL;
-//         rxs->transfer_id               = frame->transfer_id;
-//         rxs->toggle                    = INITIAL_TOGGLE_STATE;
-//         rxs->redundant_transport_index = redundant_transport_index;
-//     }
-//
-//     int8_t out = 0;
-//     // if (need_restart && (!frame->start_of_transfer))
-//     // {
-//     //     rxSessionRestart(ins, rxs);  // SOT-miss, no point going further.
-//     // }
-//     // else
-//     // {
-//     //     const bool correct_transport = (rxs->redundant_transport_index == redundant_transport_index);
-//     //     const bool correct_toggle    = (frame->toggle == rxs->toggle);
-//     //     const bool correct_tid       = (frame->transfer_id == rxs->transfer_id);
-//     //     if (correct_transport && correct_toggle && correct_tid)
-//     //     {
-//     //         out = rxSessionAcceptFrame(ins, rxs, frame, extent, out_transfer);
-//     //     }
-//     // }
-//     return out;
-// }
+SERARD_PRIVATE void rxSessionUpdate(struct Serard* const                  ins,
+                                    struct SerardInternalRxSession* const rxs,
+                                    const struct RxTransferModel* const   frame,
+                                    const uint8_t                         redundant_transport_index,
+                                    const SerardMicrosecond               transfer_id_timeout_usec,
+                                    const size_t                          extent)
+{
+    SERARD_ASSERT(ins != NULL);
+    SERARD_ASSERT(rxs != NULL);
+    SERARD_ASSERT(frame != NULL);
+    SERARD_ASSERT(rxs->transfer_id <= SERARD_TRANSFER_ID_MAX);
+    SERARD_ASSERT(frame->transfer_id <= SERARD_TRANSFER_ID_MAX);
+
+    const bool tid_timed_out = (frame->timestamp_usec > rxs->transfer_timestamp_usec) &&
+                               ((frame->timestamp_usec - rxs->transfer_timestamp_usec) > transfer_id_timeout_usec);
+
+    // The monotonic 64 bit transfer ID in UAVCAN/Serial shall not wrap.
+    const bool not_monotonic = (frame->transfer_id - rxs->transfer_id) > 1;
+
+    const bool need_restart =
+        tid_timed_out || ((rxs->redundant_transport_index == redundant_transport_index) && not_monotonic);
+
+    if (need_restart)
+    {
+        rxs->transfer_id               = frame->transfer_id;
+        rxs->redundant_transport_index = redundant_transport_index;
+    }
+}
 
 // TODO: incorporate this accept
 // SERARD_PRIVATE int8_t rxAcceptTransfer(struct Serard* const                 ins,
